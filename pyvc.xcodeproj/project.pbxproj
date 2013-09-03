@@ -1,0 +1,198 @@
+// !$*UTF8*$!
+{
+	archiveVersion = 1;
+	classes = {
+	};
+	objectVersion = 46;
+	objects = {
+
+/* Begin PBXFileReference section */
+		B810D2E815093CC90077296D /* sandbox.py */ = {isa = PBXFileReference; fileEncoding = 4; lastKnownFileType = text.script.python; path = sandbox.py; sourceTree = "<group>"; };
+		B88584B11423C41B003DC67F /* vcal_py_options_example.dat */ = {isa = PBXFileReference; fileEncoding = 4; lastKnownFileType = text; path = vcal_py_options_example.dat; sourceTree = "<group>"; };
+		B8A9FA25172883A1004122D6 /* eli_demo.py */ = {isa = PBXFileReference; fileEncoding = 4; lastKnownFileType = text.script.python; path = eli_demo.py; sourceTree = "<group>"; };
+		B8B11F9914BFA11A00147EDC /* vcal_py_trace_file_example.dat */ = {isa = PBXFileReference; fileEncoding = 4; lastKnownFileType = text; path = vcal_py_trace_file_example.dat; sourceTree = "<group>"; };
+		B8D0978B178B43390006310A /* siso_test.py */ = {isa = PBXFileReference; fileEncoding = 4; lastKnownFileType = text.script.python; path = siso_test.py; sourceTree = "<group>"; };
+		B8EFC34317CFC2CD006B4107 /* pyvc.pth */ = {isa = PBXFileReference; fileEncoding = 4; lastKnownFileType = text; path = pyvc.pth; sourceTree = "<group>"; };
+		B8EFC34417CFC2CD006B4107 /* pyvc.py */ = {isa = PBXFileReference; fileEncoding = 4; lastKnownFileType = text.script.python; path = pyvc.py; sourceTree = "<group>"; };
+		B8EFC34617CFC5FA006B4107 /* Chaos.py */ = {isa = PBXFileReference; fileEncoding = 4; lastKnownFileType = text.script.python; path = Chaos.py; sourceTree = "<group>"; };
+		B8EFC34717CFC5FA006B4107 /* Converter.py */ = {isa = PBXFileReference; fileEncoding = 4; lastKnownFileType = text.script.python; path = Converter.py; sourceTree = "<group>"; };
+		B8EFC34817CFC5FA006B4107 /* MyVector.py */ = {isa = PBXFileReference; fileEncoding = 4; lastKnownFileType = text.script.python; path = MyVector.py; sourceTree = "<group>"; };
+		B8EFC34917CFC5FA006B4107 /* Utils.py */ = {isa = PBXFileReference; fileEncoding = 4; lastKnownFileType = text.script.python; path = Utils.py; sourceTree = "<group>"; };
+		B8EFC34A17CFC5FA006B4107 /* VC.py */ = {isa = PBXFileReference; fileEncoding = 4; lastKnownFileType = text.script.python; path = VC.py; sourceTree = "<group>"; };
+		B8EFC34B17CFC629006B4107 /* vcsys.py */ = {isa = PBXFileReference; fileEncoding = 4; lastKnownFileType = text.script.python; path = vcsys.py; sourceTree = "<group>"; };
+		B8EFC34C17CFC6B1006B4107 /* vcgeometry.py */ = {isa = PBXFileReference; fileEncoding = 4; lastKnownFileType = text.script.python; path = vcgeometry.py; sourceTree = "<group>"; };
+		B8EFC34D17CFC785006B4107 /* vcevents.py */ = {isa = PBXFileReference; fileEncoding = 4; lastKnownFileType = text.script.python; path = vcevents.py; sourceTree = "<group>"; };
+		B8EFC34E17CFCDD2006B4107 /* __init__.py */ = {isa = PBXFileReference; fileEncoding = 4; lastKnownFileType = text.script.python; path = __init__.py; sourceTree = "<group>"; };
+		B8EFC34F17CFD273006B4107 /* vcexceptions.py */ = {isa = PBXFileReference; fileEncoding = 4; lastKnownFileType = text.script.python; path = vcexceptions.py; sourceTree = "<group>"; };
+		B8EFC35017D10DDC006B4107 /* vcplots.py */ = {isa = PBXFileReference; fileEncoding = 4; lastKnownFileType = text.script.python; path = vcplots.py; sourceTree = "<group>"; };
+		B8EFC35117D12372006B4107 /* vcutils.py */ = {isa = PBXFileReference; fileEncoding = 4; lastKnownFileType = text.script.python; path = vcutils.py; sourceTree = "<group>"; };
+/* End PBXFileReference section */
+
+/* Begin PBXGroup section */
+		B8948A021385A580008946E8 = {
+			isa = PBXGroup;
+			children = (
+				B8EFC34317CFC2CD006B4107 /* pyvc.pth */,
+				B8EFC34417CFC2CD006B4107 /* pyvc.py */,
+				B8D0978B178B43390006310A /* siso_test.py */,
+				B8A9FA25172883A1004122D6 /* eli_demo.py */,
+				B810D2E815093CC90077296D /* sandbox.py */,
+				B88584B11423C41B003DC67F /* vcal_py_options_example.dat */,
+				B8B11F9914BFA11A00147EDC /* vcal_py_trace_file_example.dat */,
+				B8EFC34517CFC5FA006B4107 /* pyvc */,
+			);
+			sourceTree = "<group>";
+		};
+		B8EFC34517CFC5FA006B4107 /* pyvc */ = {
+			isa = PBXGroup;
+			children = (
+				B8EFC34617CFC5FA006B4107 /* Chaos.py */,
+				B8EFC34717CFC5FA006B4107 /* Converter.py */,
+				B8EFC34817CFC5FA006B4107 /* MyVector.py */,
+				B8EFC34917CFC5FA006B4107 /* Utils.py */,
+				B8EFC34A17CFC5FA006B4107 /* VC.py */,
+				B8EFC34B17CFC629006B4107 /* vcsys.py */,
+				B8EFC34C17CFC6B1006B4107 /* vcgeometry.py */,
+				B8EFC34D17CFC785006B4107 /* vcevents.py */,
+				B8EFC34E17CFCDD2006B4107 /* __init__.py */,
+				B8EFC34F17CFD273006B4107 /* vcexceptions.py */,
+				B8EFC35017D10DDC006B4107 /* vcplots.py */,
+				B8EFC35117D12372006B4107 /* vcutils.py */,
+			);
+			path = pyvc;
+			sourceTree = "<group>";
+		};
+/* End PBXGroup section */
+
+/* Begin PBXLegacyTarget section */
+		B8A0125013E8766000E2B0E7 /* pyvc */ = {
+			isa = PBXLegacyTarget;
+			buildArgumentsString = "$(ACTION)";
+			buildConfigurationList = B8A0125113E8766100E2B0E7 /* Build configuration list for PBXLegacyTarget "pyvc" */;
+			buildPhases = (
+			);
+			buildToolPath = /opt/local/bin/python;
+			dependencies = (
+			);
+			name = pyvc;
+			passBuildSettingsInEnvironment = 1;
+			productName = vcal_py;
+		};
+/* End PBXLegacyTarget section */
+
+/* Begin PBXProject section */
+		B8948A041385A580008946E8 /* Project object */ = {
+			isa = PBXProject;
+			attributes = {
+				LastUpgradeCheck = 0410;
+			};
+			buildConfigurationList = B8948A071385A580008946E8 /* Build configuration list for PBXProject "pyvc" */;
+			compatibilityVersion = "Xcode 3.2";
+			developmentRegion = English;
+			hasScannedForEncodings = 0;
+			knownRegions = (
+				English,
+				Japanese,
+				French,
+				German,
+			);
+			mainGroup = B8948A021385A580008946E8;
+			projectDirPath = "";
+			projectRoot = "";
+			targets = (
+				B8A0125013E8766000E2B0E7 /* pyvc */,
+			);
+		};
+/* End PBXProject section */
+
+/* Begin XCBuildConfiguration section */
+		B8948A051385A580008946E8 /* Debug */ = {
+			isa = XCBuildConfiguration;
+			buildSettings = {
+				COPY_PHASE_STRIP = NO;
+			};
+			name = Debug;
+		};
+		B8948A061385A580008946E8 /* Release */ = {
+			isa = XCBuildConfiguration;
+			buildSettings = {
+				COPY_PHASE_STRIP = YES;
+			};
+			name = Release;
+		};
+		B8A0125213E8766100E2B0E7 /* Debug */ = {
+			isa = XCBuildConfiguration;
+			buildSettings = {
+				ALWAYS_SEARCH_USER_PATHS = NO;
+				ARCHS = "$(ARCHS_STANDARD_64_BIT)";
+				DEBUGGING_SYMBOLS = YES;
+				GCC_C_LANGUAGE_STANDARD = gnu99;
+				GCC_DYNAMIC_NO_PIC = NO;
+				GCC_ENABLE_OBJC_EXCEPTIONS = YES;
+				GCC_GENERATE_DEBUGGING_SYMBOLS = YES;
+				GCC_OPTIMIZATION_LEVEL = 0;
+				GCC_PREPROCESSOR_DEFINITIONS = (
+					"DEBUG=1",
+					"$(inherited)",
+				);
+				GCC_SYMBOLS_PRIVATE_EXTERN = NO;
+				GCC_VERSION = com.apple.compilers.llvm.clang.1_0;
+				GCC_WARN_64_TO_32_BIT_CONVERSION = YES;
+				GCC_WARN_ABOUT_MISSING_PROTOTYPES = YES;
+				GCC_WARN_ABOUT_RETURN_TYPE = YES;
+				GCC_WARN_UNUSED_VARIABLE = YES;
+				MACOSX_DEPLOYMENT_TARGET = 10.7;
+				ONLY_ACTIVE_ARCH = YES;
+				OTHER_CFLAGS = "";
+				OTHER_LDFLAGS = "";
+				PRODUCT_NAME = pyvc;
+				SDKROOT = macosx;
+			};
+			name = Debug;
+		};
+		B8A0125313E8766100E2B0E7 /* Release */ = {
+			isa = XCBuildConfiguration;
+			buildSettings = {
+				ALWAYS_SEARCH_USER_PATHS = NO;
+				ARCHS = "$(ARCHS_STANDARD_64_BIT)";
+				DEBUG_INFORMATION_FORMAT = "dwarf-with-dsym";
+				GCC_C_LANGUAGE_STANDARD = gnu99;
+				GCC_ENABLE_OBJC_EXCEPTIONS = YES;
+				GCC_VERSION = com.apple.compilers.llvm.clang.1_0;
+				GCC_WARN_64_TO_32_BIT_CONVERSION = YES;
+				GCC_WARN_ABOUT_MISSING_PROTOTYPES = YES;
+				GCC_WARN_ABOUT_RETURN_TYPE = YES;
+				GCC_WARN_UNUSED_VARIABLE = YES;
+				MACOSX_DEPLOYMENT_TARGET = 10.7;
+				OTHER_CFLAGS = "";
+				OTHER_LDFLAGS = "";
+				PRODUCT_NAME = pyvc;
+				SDKROOT = macosx;
+			};
+			name = Release;
+		};
+/* End XCBuildConfiguration section */
+
+/* Begin XCConfigurationList section */
+		B8948A071385A580008946E8 /* Build configuration list for PBXProject "pyvc" */ = {
+			isa = XCConfigurationList;
+			buildConfigurations = (
+				B8948A051385A580008946E8 /* Debug */,
+				B8948A061385A580008946E8 /* Release */,
+			);
+			defaultConfigurationIsVisible = 0;
+			defaultConfigurationName = Release;
+		};
+		B8A0125113E8766100E2B0E7 /* Build configuration list for PBXLegacyTarget "pyvc" */ = {
+			isa = XCConfigurationList;
+			buildConfigurations = (
+				B8A0125213E8766100E2B0E7 /* Debug */,
+				B8A0125313E8766100E2B0E7 /* Release */,
+			);
+			defaultConfigurationIsVisible = 0;
+			defaultConfigurationName = Release;
+		};
+/* End XCConfigurationList section */
+	};
+	rootObject = B8948A041385A580008946E8 /* Project object */;
+}
