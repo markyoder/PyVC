@@ -1,12 +1,19 @@
 #!/usr/bin/env python
 from . import vcexceptions
-import h5py
+from . import vcutils
+#import h5py
 
 class VCSys(object):
-    def __init__(self, sim_file=''):
-        self.sim_file = sim_file
+    def __init__(self, sim_data):
+        self.sim_data = sim_data
         
-        f=tables.open_file('demo_big.h5')
+        if type(self.sim_data) != vcutils.VCSimData:
+            raise vcexceptions.NoSimData(self.sim_data)
+        
+        if self.sim_data.file is None:
+            raise vcexceptions.NoSimFile()
+        #print type(sim_data.file)
+        #f=tables.open_file('demo_big.h5')
         
         '''
         self._geometry = None

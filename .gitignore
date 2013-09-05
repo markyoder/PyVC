@@ -39,6 +39,7 @@ nosetests.xml
 sandbox*
 vcal_py_*.dat
 siso_test.py
+mptest.py
 
 #########################
 # .gitignore file for Xcode4 / OS X Source projects

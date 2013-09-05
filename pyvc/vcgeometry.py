@@ -2,26 +2,46 @@
 from . import VCSys
 
 class VCGeometry(VCSys):
-    def __init__(self,sim_file):
-        super(VCGeometry, self).__init__(sim_file)
+    def __init__(self,sim_data):
+        super(VCGeometry, self).__init__(sim_data)
+    
+        self.geometry_data = self.sim_data.file.root.block_info_table
+        #self.sim_data.a += 'a has a geometry. '
         
-        self.base_lat_lon = None
-        self.sections = None
-        self.elements = None
-        self.nodes = None
-        self.converter = Converter.Converter()
-        self.element_section_map = None
-        self.proximity_table = None
-        self.distance_table = None
+        #self.base_lat_lon = None
+        #self.sections = None
+        #self.elements = None
+        #self.nodes = None
+        #self.converter = Converter.Converter()
+        #self.element_section_map = None
+        #self.proximity_table = None
+        #self.distance_table = None
         
-        self.max_lat = -90.0
-        self.min_lat = 90.0
-        self.max_lon = -180.0
-        self.min_lon = 180.0
-        self.max_depth = -py_sys.float_info.max
-        self.min_depth = 0.0
-        
-        self.sys = sys
+        #self.max_lat = -90.0
+        #self.min_lat = 90.0
+        #self.max_lon = -180.0
+        #self.min_lon = 180.0
+        #self.max_depth = -py_sys.float_info.max
+        #self.min_depth = 0.0
+    
+    def total_area(self, ele_ids):
+        area = 0.0
+        for x in self.geometry_data.itersequence(ele_ids):
+            area += ((x['m_x_pt1'] - x['m_x_pt2'])**2.0 + (x['m_y_pt1'] - x['m_y_pt2'])**2.0 + (x['m_z_pt1'] - x['m_z_pt2'])**2.0)
+        return area
+    
+    def element_area(self, ele_id):
+        #assumes an element is square
+        ele = self.element(ele_id)
+        p1 = (ele['m_x_pt1'],ele['m_y_pt1'],ele['m_z_pt1'])
+        p2 = (ele['m_x_pt2'],ele['m_y_pt2'],ele['m_z_pt2'])
+        #p3 = (ele[13],ele[14],ele[15])
+        #p4 = (ele[18],ele[19],ele[20])
+        return ((p1[0] - p2[0])**2.0 + (p1[1] - p2[1])**2.0 + (p1[2] - p2[2])**2.0)
+    
+    
+    def element(self, ele_id):
+        return self.geometry_data[ele_id]
     
     @property
     def layered_sections(self):
