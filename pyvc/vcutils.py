@@ -19,11 +19,13 @@ class DataProcessor(multiprocessing.Process):
         super(DataProcessor, self).__init__()
     
     def run(self):
-        self.sim_file = tables.open_file('demo_big.h5', 'r')
+        self.sim_file = tables.open_file(self.sim_file_path, 'r')
 
         sweep_table = self.sim_file.get_node('/event_sweep_table')
         event_table = self.sim_file.get_node('/event_table')
-
+        block_info_table = self.sim_file.get_node('/block_info_table')
+        pt1getter = itemgetter(3,4,5)
+        pt4getter = itemgetter(18,19,20)
         while not self.kill_received:
  
             # get a task
@@ -35,17 +37,27 @@ class DataProcessor(multiprocessing.Process):
             #sections = self.vc_sys.geometry.sectionsSortedByID(section_list)
         
             print 'processing events {} - {}'.format(*event_range)
-            results = []
+            results = {}
             for evnum in range(*event_range):
                 areas = {}
                 total_slip = 0.0
                 slip_records = 0
+                surface_rupture_length = 0.0
+                #print evnum, event_table[evnum]
                 for sweep in sweep_table[event_table[evnum]['start_sweep_rec']:event_table[evnum]['end_sweep_rec']]:
-                    areas[sweep['block_id']] = sweep['area']
+                    eleid = sweep['block_id']
+                    #trace_sum = block_info_table[eleid]['m_trace_flag_pt1'] + block_info_table[eleid]['m_trace_flag_pt2'] + block_info_table[eleid]['m_trace_flag_pt3'] + block_info_table[eleid]['m_trace_flag_pt4']
+                    
+                    if block_info_table[eleid]['m_trace_flag_pt1'] > 0:
+                        #pt1 = (block_info_table[eleid]['m_x_pt1'], block_info_table[eleid]['m_y_pt1'], block_info_table[eleid]['m_z_pt1'])
+                        #pt4 = (block_info_table[eleid]['m_x_pt4'], block_info_table[eleid]['m_y_pt4'], block_info_table[eleid]['m_z_pt4'])
+                        surface_rupture_length += (sum((x-y)**2.0 for x, y in itertools.izip(pt1getter(block_info_table[eleid]),pt4getter(block_info_table[eleid]))))**0.5
+                    
+                    areas[eleid] = sweep['area']
                     total_slip += sweep['slip']
                     slip_records += 1
-                #print slip_records
-                results.append((evnum, total_slip, slip_records, sum(areas.values())))
+                #print areas.keys()
+                results[evnum] = {'average_slip':total_slip/float(slip_records), 'area':sum(areas.values()), 'surface_rupture_length':surface_rupture_length, 'involved_elements':areas.keys()}
             
                 #event_elements[i] = set(events.get_event_elements(i))
             
@@ -106,6 +118,7 @@ class VCSimData(object):
         print 'getting new data'
         start_time = time.time()
         num_processes = multiprocessing.cpu_count()
+        #num_processes = 1
         total_events = self.file.root.event_table.nrows
         #close the current file
         self.file.close()
@@ -129,14 +142,22 @@ class VCSimData(object):
             worker.start()
 
         # collect the results off the queue
-        results = []
+        results = {}
         for i in range(num_processes):
-            results.append(result_queue.get())
-        data_process_results_sorted = sorted(list( itertools.chain(*results) ), key=itemgetter(0))
+            #current_results = result_queue.get()
+            #for k in current_results.keys():
+            #    print k, current_results[k]
+            results = dict(results, **result_queue.get())
+            #results.append(result_queue.get())
+        #print len(results)
+        #data_process_results_sorted = []
+        #for k in sorted(results.keys()):
+        #    print k, results[k]
+        data_process_results_sorted = [results[key] for key in sorted(results.keys())]
         
         print 'Done! {} seconds'.format(time.time() - start_time)
         #print data_process_results_sorted
-
+        '''
     #create the new table
         self.file = tables.open_file(self.file_path, 'a')
         table = self.file.root.event_table
@@ -190,7 +211,7 @@ class VCSimData(object):
 
     #open the file with the new table
         self.file = tables.open_file(self.file_path)
-
+        '''
         #self.file.root.event_table.col('event_num')
 '''
 # All access to the file goes through a single instance of this class.
