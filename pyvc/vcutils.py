@@ -87,8 +87,12 @@ class VCSimData(object):
     def __init__(self, file_path=None):
         self.file = None
         self.file_path = file_path
+        
         self.do_event_area = False
         self.do_event_average_slip = False
+        self.do_event_surface_rupture_length = False
+        self.do_event_involved_elements = False
+        
         if self.file_path is not None:
             self.open_file(self.file_path)
     
@@ -109,19 +113,29 @@ class VCSimData(object):
 
         if 'event_average_slip' not in self.file.root.event_table.colnames:
             self.do_event_average_slip = True
+    
+        if 'event_surface_rupture_length' not in self.file.root.event_table.colnames:
+            self.do_event_surface_rupture_length = True
+        
+        if 'event_involved_elements' not in self.file.root.event_table.colnames:
+            self.do_event_involved_elements = True
 
-        if self.do_event_area or self.do_event_average_slip:
+        if self.do_event_area or self.do_event_average_slip or self.do_event_surface_rupture_length or self.do_event_involved_elements:
             self.calculate_additional_data()
 
     def calculate_additional_data(self):
+    # get some info from the open file and then close it
+        eleid_max_digits = len(str(self.file.root.block_info_table.nrows))
+        total_events = self.file.root.event_table.nrows
+        #close the current file
+        self.file.close()
+        
     # get the new data
         print 'getting new data'
         start_time = time.time()
         num_processes = multiprocessing.cpu_count()
         #num_processes = 1
-        total_events = self.file.root.event_table.nrows
-        #close the current file
-        self.file.close()
+        
         
         #break the work up
         seg = int(round(float(total_events)/float(num_processes)))
@@ -153,11 +167,21 @@ class VCSimData(object):
         #data_process_results_sorted = []
         #for k in sorted(results.keys()):
         #    print k, results[k]
-        data_process_results_sorted = [results[key] for key in sorted(results.keys())]
+        self.max_involved_elements = []
+        def find_max_involved_elements(dat, self, key):
+            #print self.max_involved_elements
+            if len(dat['involved_elements']) > len(self.max_involved_elements):
+                print key
+                self.max_involved_elements = dat['involved_elements']
+            return dat
+        data_process_results_sorted = [find_max_involved_elements(results[key], self, key) for key in sorted(results.keys())]
+        
+        max_str_len = len(','.join([str(x) for x in self.max_involved_elements]))
         
         print 'Done! {} seconds'.format(time.time() - start_time)
         #print data_process_results_sorted
-        '''
+        
+        
     #create the new table
         self.file = tables.open_file(self.file_path, 'a')
         table = self.file.root.event_table
@@ -173,6 +197,13 @@ class VCSimData(object):
         if self.do_event_average_slip:
             descr2['event_average_slip'] = tables.Float64Col(dflt=0.0)
         
+        if self.do_event_surface_rupture_length:
+            descr2['event_surface_rupture_length'] = tables.Float64Col(dflt=0.0)
+            
+        if self.do_event_involved_elements:
+            descr2['event_involved_elements'] = tables.StringCol(max_str_len)
+        
+        #print descr2
         # Create a new table with the new description
         table2 = self.file.create_table('/', 'tmp', descr2, 'Event Table')
         
@@ -192,10 +223,16 @@ class VCSimData(object):
 
         # Fill the new column
         if self.do_event_area:
-            table2.cols.event_area[:] = [ x[3] for x in data_process_results_sorted ]
+            table2.cols.event_area[:] = [ x['area'] for x in data_process_results_sorted ]
         
         if self.do_event_average_slip:
-            table2.cols.event_average_slip[:] = [ x[1]/float(x[2]) for x in data_process_results_sorted ]
+            table2.cols.event_average_slip[:] = [ x['average_slip'] for x in data_process_results_sorted ]
+
+        if self.do_event_surface_rupture_length:
+            table2.cols.event_surface_rupture_length[:] = [ x['surface_rupture_length'] for x in data_process_results_sorted ]
+        
+        if self.do_event_involved_elements:
+            table2.cols.event_involved_elements[:] = [ ','.join([str(y) for y in x['involved_elements']]) for x in data_process_results_sorted ]
         	
         # Remove the original table
         table.remove()
@@ -211,7 +248,7 @@ class VCSimData(object):
 
     #open the file with the new table
         self.file = tables.open_file(self.file_path)
-        '''
+        
         #self.file.root.event_table.col('event_num')
 '''
 # All access to the file goes through a single instance of this class.
