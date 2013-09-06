@@ -36,8 +36,8 @@ class VCGeometry(VCSys):
         p1 = (ele['m_x_pt1'],ele['m_y_pt1'],ele['m_z_pt1'])
         p2 = (ele['m_x_pt2'],ele['m_y_pt2'],ele['m_z_pt2'])
         #p3 = (ele[13],ele[14],ele[15])
-        #p4 = (ele[18],ele[19],ele[20])
-        return ((p1[0] - p2[0])**2.0 + (p1[1] - p2[1])**2.0 + (p1[2] - p2[2])**2.0)
+        p4 = (ele['m_x_pt4'],ele['m_y_pt4'],ele['m_z_pt4'])
+        return (((p4[0] - p1[0])**2.0 + (p4[1] - p1[1])**2.0 + (p4[2] - p1[2])**2.0)**0.5) * (((p2[0] - p1[0])**2.0 + (p2[1] - p1[1])**2.0 + (p2[2] - p1[2])**2.0)**0.5)
     
     
     def element(self, ele_id):

@@ -39,7 +39,22 @@ class VCEvents(VCSys):
         else:
             return 'ids', 0, self.event_data.nrows
             
-        
+    
+    def get_event_elements(self, evnum):
+        #print self.event_data[evnum]['start_sweep_rec'], self.event_data[evnum]['end_sweep_rec']
+        return set([x['block_id'] for x in self.sweep_data[self.event_data[evnum]['start_sweep_rec']:self.event_data[evnum]['end_sweep_rec']]])
+        #return [x['block_id'] for x in self.sweep_data.where('event_number == {}'.format(evnum))]
+    
+    def get_event_slip_area(self, evnum):
+        areas = {}
+        total_slip = 0.0
+        slip_records = 0
+        for sweep in self.sweep_data[self.event_data[evnum]['start_sweep_rec']:self.event_data[evnum]['end_sweep_rec']]:
+            areas[sweep['block_id']] = sweep['area']
+            total_slip += sweep['slip']
+            slip_records += 1
+        #print slip_records
+        return (total_slip, sum(areas.values()), slip_records)
     
     def get_event_data(self, requested_data, event_range=None, magnitude_filter=None):
         type, start, stop = self.unpack_event_range(event_range)
@@ -82,7 +97,11 @@ class VCEvents(VCSys):
         #print type, start, stop
         #for event in self.event_data.where(
         return event_data
-        
+    
+    @property
+    def num_events(self):
+        return self.event_data.nrows
+    
     @property
     def years(self):
         f = self.openSimFile()
