@@ -5,8 +5,143 @@ import multiprocessing
 from operator import itemgetter
 import time
 import itertools
+import numpy as np
 
-class DataProcessor(multiprocessing.Process):
+import math
+import calendar
+from geographiclib.geodesic import Geodesic
+
+class Converter:
+        def __init__(self):
+                self.lat0 = 31.5
+                self.lon0 = -126.0
+                self.earth_radius = self.km_m(6371.0)
+        
+        def distanceOnEarthsSurface(self, lat1, lon1, lat2, lon2):
+            conv = Geodesic.WGS84.Inverse(lat1, lon1, lat2, lon2)
+            return conv["s12"]
+        
+        def latlon_xy_2pt(self, lat1, lon1, lat2, lon2):
+            conv = Geodesic.WGS84.Inverse(lat1, lon1, lat2, lon2)
+            return (conv["s12"]*math.sin(self.deg_rad(conv["azi1"])), conv["s12"]*math.cos(self.deg_rad(conv["azi1"])))
+        
+        def yearDecimalToYearMonthDay(self,yearDecimal,time=False):
+                decimal, year = math.modf(yearDecimal)
+                decimal, month = math.modf(12.0*decimal)
+                decimal, day = math.modf(calendar.monthrange(1972, int(month + 1))[1]*decimal)
+                decimal, hour = math.modf(24.0*decimal)
+                decimal, minute = math.modf(60.0*decimal)
+                decimal, second = math.modf(60.0*decimal)
+                
+                if time:
+                    return int(year), int(month + 1), int(day + 1), int(hour), int(minute), int(second), decimal
+                else:
+                    return int(year), int(month + 1), int(day + 1)
+        
+        def year_sec(self, year):
+            return 365.0 * 24.0 * 60.0 * 60.0 * year
+        
+        def sec_year(self, sec):
+            return (1.0/365.0) * (1.0/24.0) * (1.0/60.0) * (1.0/60.0) * sec
+            
+        def km_m(self, km):
+            return km * 10.0**(3.0)
+        
+        def m_km(self, m):
+            return m * 10.0**(-3.0)
+
+        def msq_kmsq(self, msq):
+            return msq * 1000.0**(-2.0)
+        
+        def deg_rad(self, deg):
+            return deg * (math.pi/180.0)
+        
+        def rad_deg(self, rad):
+            return rad * (180.0/math.pi)
+    
+        def setLatLon0(self, lat0, lon0):
+            self.lat0 = lat0
+            self.lon0 = lon0
+
+        def latlon_xy(self, lat, lon):
+            conv = Geodesic.WGS84.Inverse(self.lat0, self.lon0, lat, lon)
+            return (conv["s12"]*math.sin(self.deg_rad(conv["azi1"])), conv["s12"]*math.cos(self.deg_rad(conv["azi1"])))
+            
+        def latlon_xy_old(self, lat, lon):
+            x = self.arclen((self.lat0, self.lon0), (self.lat0, lon))
+            y = self.arclen((self.lat0,0),(lat,0))
+            
+            if (lon < self.lon0):
+                x *= -1
+            
+            if (lat < self.lat0):
+                y *= -1
+            
+            return (x,y)
+
+        def xy_latlon(self, x, y):
+            s12 = (x**2.0 + y**2.0)**(0.5)
+            azi1 = self.rad_deg(math.atan2(x,y))
+            conv = Geodesic.WGS84.Direct(self.lat0, self.lon0, azi1, s12)
+            
+            return (conv["lat2"], conv["lon2"])
+            
+        def xy_latlon_old(self, x, y):
+            
+            new_lat = self.rad_deg(y/self.earth_radius)+self.lat0;
+
+            new_lon = 2.0 * self.rad_deg(math.asin(math.sin(x/(2.0 * self.earth_radius))/math.cos(self.deg_rad(new_lat))))+self.lon0;
+
+            return new_lat,new_lon
+
+        def arclen(self, pt1, pt2):
+            # pts are always (lat,lon)
+
+            dlon = self.deg_rad(pt2[1]-pt1[1])
+            dlat = self.deg_rad(pt2[0]-pt1[0])
+            lat1 = self.deg_rad(pt1[0])
+            lat2 = self.deg_rad(pt2[0])
+
+            a = math.sin(dlat/2.0)**2.0 + math.cos(lat1)*math.cos(lat2)*( math.sin(dlon/2.0)**2.0 )
+            c = 2.0*math.atan2(math.sqrt(a), math.sqrt(1.0-a))
+            d = self.earth_radius*c
+
+            return d
+
+def calculate_averages(x,y):
+    num_bins = math.floor(len(x)/100)
+    
+    if num_bins < 20:
+        num_bins = 20
+    elif num_bins > 100:
+        num_bins = 100
+    
+    x = np.array(x)
+    y = np.array(y)
+    
+    bin_min = math.floor(math.log(np.min(x),10))
+    bin_max = math.ceil(math.log(np.max(x),10))
+    
+    bins = np.logspace(bin_min,bin_max,num=num_bins)
+    inds = np.digitize(x, bins)
+    
+    binned_data = {}
+    
+    for n, i in enumerate(inds):
+        try:
+            binned_data[i].append(y[n])
+        except KeyError:
+            binned_data[i] = [y[n]]
+
+    x_ave = []
+    y_ave = []
+    for k in sorted(binned_data.keys()):
+        x_ave.append(0.5*(bins[k-1]+bins[k]))
+        y_ave.append(sum(binned_data[k])/float(len(binned_data[k])))
+        
+    return x_ave, y_ave
+
+class EventDataProcessor(multiprocessing.Process):
     def __init__(self, sim_file_path, work_queue, result_queue):
  
         # job management stuff
@@ -14,28 +149,33 @@ class DataProcessor(multiprocessing.Process):
         self.result_queue = result_queue
         self.kill_received = False
         
+        #the path to the sim file
         self.sim_file_path = sim_file_path
         
-        super(DataProcessor, self).__init__()
+        super(EventDataProcessor, self).__init__()
     
     def run(self):
+    
+        #the simulation file
         self.sim_file = tables.open_file(self.sim_file_path, 'r')
-
+        
+        #the tables we will need to process
         sweep_table = self.sim_file.get_node('/event_sweep_table')
         event_table = self.sim_file.get_node('/event_table')
         block_info_table = self.sim_file.get_node('/block_info_table')
+        
+        #these getters speed up the caculation of surface rupture length
         pt1getter = itemgetter(3,4,5)
         pt4getter = itemgetter(18,19,20)
+        
         while not self.kill_received:
- 
             # get a task
             try:
                 event_range = self.work_queue.get_nowait()
             except Queue.Empty:
                 break
             
-            #sections = self.vc_sys.geometry.sectionsSortedByID(section_list)
-        
+            # do the processing
             print 'processing events {} - {}'.format(*event_range)
             results = {}
             for evnum in range(*event_range):
@@ -43,7 +183,6 @@ class DataProcessor(multiprocessing.Process):
                 total_slip = 0.0
                 slip_records = 0
                 surface_rupture_length = 0.0
-                #print evnum, event_table[evnum]
                 for sweep in sweep_table[event_table[evnum]['start_sweep_rec']:event_table[evnum]['end_sweep_rec']]:
                     eleid = sweep['block_id']
                     #trace_sum = block_info_table[eleid]['m_trace_flag_pt1'] + block_info_table[eleid]['m_trace_flag_pt2'] + block_info_table[eleid]['m_trace_flag_pt3'] + block_info_table[eleid]['m_trace_flag_pt4']
@@ -117,27 +256,29 @@ class VCSimData(object):
         if 'event_surface_rupture_length' not in self.file.root.event_table.colnames:
             self.do_event_surface_rupture_length = True
         
-        if 'event_involved_elements' not in self.file.root.event_table.colnames:
+        if 'event_blocks_table' not in self.file.root._v_children.keys():
             self.do_event_involved_elements = True
-
+        
         if self.do_event_area or self.do_event_average_slip or self.do_event_surface_rupture_length or self.do_event_involved_elements:
             self.calculate_additional_data()
 
     def calculate_additional_data(self):
-    # get some info from the open file and then close it
-        eleid_max_digits = len(str(self.file.root.block_info_table.nrows))
+        #-----------------------------------------------------------------------
+        # get info from the original file
+        #-----------------------------------------------------------------------
         total_events = self.file.root.event_table.nrows
         #close the current file
         self.file.close()
         
-    # get the new data
-        print 'getting new data'
+        #-----------------------------------------------------------------------
+        # get the new data
+        #-----------------------------------------------------------------------
+        print 'Calculating new data'
+        
         start_time = time.time()
         num_processes = multiprocessing.cpu_count()
-        #num_processes = 1
         
-        
-        #break the work up
+        # break the work up
         seg = int(round(float(total_events)/float(num_processes)))
         work_queue = multiprocessing.Queue()
         for i in range(num_processes):
@@ -152,197 +293,98 @@ class VCSimData(object):
 
         # spawn workers
         for i in range(num_processes):
-            worker = DataProcessor(self.file_path, work_queue, result_queue)
+            worker = EventDataProcessor(self.file_path, work_queue, result_queue)
             worker.start()
 
         # collect the results off the queue
         results = {}
         for i in range(num_processes):
-            #current_results = result_queue.get()
-            #for k in current_results.keys():
-            #    print k, current_results[k]
             results = dict(results, **result_queue.get())
-            #results.append(result_queue.get())
-        #print len(results)
-        #data_process_results_sorted = []
-        #for k in sorted(results.keys()):
-        #    print k, results[k]
-        self.max_involved_elements = []
-        def find_max_involved_elements(dat, self, key):
-            #print self.max_involved_elements
-            if len(dat['involved_elements']) > len(self.max_involved_elements):
-                print key
-                self.max_involved_elements = dat['involved_elements']
-            return dat
-        data_process_results_sorted = [find_max_involved_elements(results[key], self, key) for key in sorted(results.keys())]
-        
-        max_str_len = len(','.join([str(x) for x in self.max_involved_elements]))
+        data_process_results_sorted = [results[key] for key in sorted(results.keys())]
         
         print 'Done! {} seconds'.format(time.time() - start_time)
-        #print data_process_results_sorted
         
-        
-    #create the new table
+        print 'Creating new tables'
+        table_start_time = time.time()
+        #-----------------------------------------------------------------------
+        # create the new event_table
+        #-----------------------------------------------------------------------
         self.file = tables.open_file(self.file_path, 'a')
-        table = self.file.root.event_table
+        event_table = self.file.root.event_table
         
-        # Get a description of table in dictionary format
-        descr = table.description._v_colObjects
-        descr2 = descr.copy()
+        # get a description of table in dictionary format
+        desc_orig = event_table.description._v_colObjects
+        desc_new = desc_orig.copy()
         
-        # Add a column to description
+        # add columns to description
         if self.do_event_area:
-            descr2['event_area'] = tables.Float64Col(dflt=0.0)
+            desc_new['event_area'] = tables.Float64Col(dflt=0.0)
         
         if self.do_event_average_slip:
-            descr2['event_average_slip'] = tables.Float64Col(dflt=0.0)
+            desc_new['event_average_slip'] = tables.Float64Col(dflt=0.0)
         
         if self.do_event_surface_rupture_length:
-            descr2['event_surface_rupture_length'] = tables.Float64Col(dflt=0.0)
+            desc_new['event_surface_rupture_length'] = tables.Float64Col(dflt=0.0)
+        
+        # create a new table with the new description
+        event_table_new = self.file.create_table('/', 'tmp', desc_new, 'Event Table')
+        
+        # copy the user attributes
+        event_table.attrs._f_copy(event_table_new)
+        
+        # fill the rows of new table with default values
+        for i in xrange(event_table.nrows):
+            event_table_new.row.append()
+        
+        # flush the rows to disk
+        event_table_new.flush()
+        
+        # copy the columns of source table to destination
+        for col in desc_orig:
+            getattr(event_table_new.cols, col)[:] = getattr(event_table.cols, col)[:]
+
+        # fill the new columns
+        if self.do_event_area:
+            event_table_new.cols.event_area[:] = [ x['area'] for x in data_process_results_sorted ]
+        
+        if self.do_event_average_slip:
+            event_table_new.cols.event_average_slip[:] = [ x['average_slip'] for x in data_process_results_sorted ]
+
+        if self.do_event_surface_rupture_length:
+            event_table_new.cols.event_surface_rupture_length[:] = [ x['surface_rupture_length'] for x in data_process_results_sorted ]
+        	
+        # remove the original table
+        event_table.remove()
+        
+        # move table2 to table
+        event_table_new.move('/','event_table')
+        
+        #-----------------------------------------------------------------------
+        # create a new table to store the elements that are involved in each
+        # event
+        #-----------------------------------------------------------------------
+        if self.do_event_involved_elements:
+            desc = {'event_number':tables.UIntCol(dflt=0.0), 'block_id':tables.UIntCol(dflt=0.0) }
+
+            # create the new table
+            event_blocks_table = self.file.create_table('/', 'event_blocks_table', desc, 'Event Blocks Table')
             
-        if self.do_event_involved_elements:
-            descr2['event_involved_elements'] = tables.StringCol(max_str_len)
+            # fill the table with the event elements
+            row = event_blocks_table.row
+            for evid, event_data in enumerate(data_process_results_sorted):
+                for eleid in event_data['involved_elements']:
+                    row['event_number'] = evid
+                    row['block_id'] = eleid
+                    row.append()
+            event_blocks_table.flush()
+    
+        print 'Done! {} seconds'.format(time.time() - table_start_time)
         
-        #print descr2
-        # Create a new table with the new description
-        table2 = self.file.create_table('/', 'tmp', descr2, 'Event Table')
-        
-        # Copy the user attributes
-        table.attrs._f_copy(table2)
-        
-        # Fill the rows of new table with default values
-        for i in xrange(table.nrows):
-            table2.row.append()
-        
-        # Flush the rows to disk
-        table2.flush()
-        
-        # Copy the columns of source table to destination
-        for col in descr:
-            getattr(table2.cols, col)[:] = getattr(table.cols, col)[:]
-
-        # Fill the new column
-        if self.do_event_area:
-            table2.cols.event_area[:] = [ x['area'] for x in data_process_results_sorted ]
-        
-        if self.do_event_average_slip:
-            table2.cols.event_average_slip[:] = [ x['average_slip'] for x in data_process_results_sorted ]
-
-        if self.do_event_surface_rupture_length:
-            table2.cols.event_surface_rupture_length[:] = [ x['surface_rupture_length'] for x in data_process_results_sorted ]
-        
-        if self.do_event_involved_elements:
-            table2.cols.event_involved_elements[:] = [ ','.join([str(y) for y in x['involved_elements']]) for x in data_process_results_sorted ]
-        	
-        # Remove the original table
-        table.remove()
-        
-        # Move table2 to table
-        table2.move('/','event_table')
-        	
-        # Print the new table
-        #print "Contents of the table with column added:", self.file.root.event_table[:]
-        
-        # Finally, close the file
+        #-----------------------------------------------------------------------
+        # close the file and reopen it with the new tables
+        #-----------------------------------------------------------------------
         self.file.close()
-
-    #open the file with the new table
         self.file = tables.open_file(self.file_path)
+    
+        print 'Total time {} seconds'.format(time.time() - start_time)
         
-        #self.file.root.event_table.col('event_num')
-'''
-# All access to the file goes through a single instance of this class.
-# It contains several queues that are used to communicate with other
-# processes.
-# The read_queue is used for requests to read data from the HDF5 file.
-# A list of result_queues is used to send data back to client processes.
-# The write_queue is used for requests to modify the HDF5 file.
-# One end of a pipe (shutdown) is used to signal the process to terminate.
-class FileAccess(multiprocessing.Process):
-
-    def __init__(self, h5_path, node_name, read_queue, result_queues, write_queue, shutdown):
-        self.h5_path = h5_path
-        self.node_name = node_name
-        self.read_queue = read_queue
-        self.result_queues = result_queues
-        self.write_queue = write_queue
-        self.shutdown = shutdown
-        self.block_period = .01
-        super(FileAccess, self).__init__()
-
-    def run(self):
-        self.h5_file = tables.open_file(self.h5_path, 'r+')
-        self.table = self.h5_file.get_node('/{}'.format(self.node_name))
-        another_loop = True
-        while another_loop:
-
-            # Check if the process has received the shutdown signal.
-            if self.shutdown.poll():
-                another_loop = False
-
-            # Check for any data requests in the read_queue.
-            try:
-                row_num, proc_num = self.read_queue.get(True, self.block_period)
-                # look up the appropriate result_queue for this data processor
-                # instance
-                result_queue = self.result_queues[proc_num]
-                print 'processor {0} reading from row {1}'.format(proc_num, row_num)
-                result_queue.put(self.read_data(row_num))
-                another_loop = True
-            except Queue.Empty:
-                pass
-
-            # Check for any write requests in the write_queue.
-            try:
-                row_num, data = self.write_queue.get(True, self.block_period)
-                print 'writing row', row_num
-                self.write_data(row_num, data)
-                another_loop = True
-            except Queue.Empty:
-                pass
-
-        # close the HDF5 file before shutting down
-        self.h5_file.close()
-
-    def read_data(self, row_num):
-        return self.table[row_num, :]
-
-    def write_data(self, row_num, data):
-        self.table[row_num, :] = data
-
-# This class represents a process that does work by reading and writing to the
-# HDF5 file.  It does this by sending requests to the FileAccess class instance
-# through its read and write queues.  The data results are sent back through
-# the result_queue.
-# Its actions are logged to a text file.
-class DataProcessor(multiprocessing.Process):
-
-    def __init__(self, read_queue, result_queue, write_queue, proc_num):
-        self.read_queue = read_queue
-        self.result_queue = result_queue
-        self.write_queue = write_queue
-        self.proc_num = proc_num
-        #self.output_file = output_file
-        super(DataProcessor, self).__init__()
-
-    def run(self):
-        #self.output_file = open(self.output_file, 'w')
-        # read a random row from the file
-        row_num = random.randint(0, self.array_size - 1)
-        self.read_queue.put((row_num, self.proc_num))
-        self.output_file.write(str(row_num) + '\n')
-        self.output_file.write(str(self.result_queue.get()) + '\n')
-
-        # modify a random row to equal 11 * (self.proc_num + 1)
-        #row_num = random.randint(0, self.array_size - 1)
-        #new_data = (numpy.zeros((1, self.array_size), 'i8') +
-        #            11 * (self.proc_num + 1))
-        #self.write_queue.put((row_num, new_data))
-
-        # pause, then read the modified row
-        #time.sleep(0.015)
-        #self.read_queue.put((row_num, self.proc_num))
-        #self.output_file.write(str(row_num) + '\n')
-        #self.output_file.write(str(self.result_queue.get()) + '\n')
-        #self.output_file.close()
-'''
