@@ -1,3 +1,5 @@
+import pprint
+
 '''
 A subclass of the Exception class to handle bad increment input in the daterange generator
 '''
@@ -31,3 +33,20 @@ class PlotFormatNotSupported(Exception):
         self.code = code
     def __str__(self):
         return 'The plot output format {} is not supported. Please use png, pdf or dat.'.format(self.code)
+
+class NoEventsFound(Exception):
+    def __init__(self, **kwargs):
+        self.code = kwargs
+    def __str__(self):
+        str = 'No events matching the supplied criteria were found.\n'
+        for key, value in self.code.iteritems():
+            str += '    {}:\n        '.format(key)
+            str += pprint.pformat(value)
+            str += '\n'
+        return str[0:-2]
+
+class BadSectionID(Exception):
+    def __init__(self, code):
+        self.code = code
+    def __str__(self):
+        return 'There is no section with section_id={}'.format(self.code)

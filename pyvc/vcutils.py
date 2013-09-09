@@ -119,14 +119,17 @@ def calculate_averages(x,y):
     x = np.array(x)
     y = np.array(y)
     
-    bin_min = math.floor(math.log(np.min(x),10))
+    if np.min(x) == 0:
+        bin_min = 1
+    else:
+        bin_min = math.floor(math.log(np.min(x),10))
     bin_max = math.ceil(math.log(np.max(x),10))
     
     bins = np.logspace(bin_min,bin_max,num=num_bins)
     inds = np.digitize(x, bins)
     
     binned_data = {}
-    
+
     for n, i in enumerate(inds):
         try:
             binned_data[i].append(y[n])
@@ -136,9 +139,10 @@ def calculate_averages(x,y):
     x_ave = []
     y_ave = []
     for k in sorted(binned_data.keys()):
-        x_ave.append(0.5*(bins[k-1]+bins[k]))
-        y_ave.append(sum(binned_data[k])/float(len(binned_data[k])))
-        
+        if k != 0:
+            x_ave.append(0.5*(bins[k-1]+bins[k]))
+            y_ave.append(sum(binned_data[k])/float(len(binned_data[k])))
+
     return x_ave, y_ave
 
 class EventDataProcessor(multiprocessing.Process):
@@ -183,6 +187,7 @@ class EventDataProcessor(multiprocessing.Process):
                 total_slip = 0.0
                 slip_records = 0
                 surface_rupture_length = 0.0
+                involved_sections = []
                 for sweep in sweep_table[event_table[evnum]['start_sweep_rec']:event_table[evnum]['end_sweep_rec']]:
                     eleid = sweep['block_id']
                     #trace_sum = block_info_table[eleid]['m_trace_flag_pt1'] + block_info_table[eleid]['m_trace_flag_pt2'] + block_info_table[eleid]['m_trace_flag_pt3'] + block_info_table[eleid]['m_trace_flag_pt4']
@@ -192,31 +197,16 @@ class EventDataProcessor(multiprocessing.Process):
                         #pt4 = (block_info_table[eleid]['m_x_pt4'], block_info_table[eleid]['m_y_pt4'], block_info_table[eleid]['m_z_pt4'])
                         surface_rupture_length += (sum((x-y)**2.0 for x, y in itertools.izip(pt1getter(block_info_table[eleid]),pt4getter(block_info_table[eleid]))))**0.5
                     
+                    involved_sections.append(block_info_table[eleid]['section_id'])
                     areas[eleid] = sweep['area']
                     total_slip += sweep['slip']
                     slip_records += 1
                 #print areas.keys()
-                results[evnum] = {'average_slip':total_slip/float(slip_records), 'area':sum(areas.values()), 'surface_rupture_length':surface_rupture_length, 'involved_elements':areas.keys()}
+                results[evnum] = {'average_slip':total_slip/float(slip_records), 'area':sum(areas.values()), 'surface_rupture_length':surface_rupture_length, 'involved_sections':set(involved_sections)}
             
                 #event_elements[i] = set(events.get_event_elements(i))
             
-            # the actual processing
-            #layered_sections = {}
-            #print '    layering %i sections '%(len(sections))
-            #for n, s in enumerate(sections):
-            #    sid = s.sid
-                #print sid
-            #    curr_section = []
-            #    for eid in s.selement_ids:
-            #        if self.vc_sys.geometry.elements[eid].onTrace():
-                        #print s.elementsAlongDip(eid)
-            #            curr_section.append( s.elementsAlongDip(eid) )
-                
-            #    curr_section_np = np.array(curr_section)
-                
-            #    layered_sections[s.sid] = curr_section_np.T
-
-            # store the result
+           
             self.result_queue.put(results)
         
         self.sim_file.close()
@@ -230,7 +220,7 @@ class VCSimData(object):
         self.do_event_area = False
         self.do_event_average_slip = False
         self.do_event_surface_rupture_length = False
-        self.do_event_involved_elements = False
+        self.do_events_by_section = False
         
         if self.file_path is not None:
             self.open_file(self.file_path)
@@ -256,10 +246,10 @@ class VCSimData(object):
         if 'event_surface_rupture_length' not in self.file.root.event_table.colnames:
             self.do_event_surface_rupture_length = True
         
-        if 'event_blocks_table' not in self.file.root._v_children.keys():
-            self.do_event_involved_elements = True
+        if 'events_by_section' not in self.file.root._v_groups.keys():
+            self.do_events_by_section = True
         
-        if self.do_event_area or self.do_event_average_slip or self.do_event_surface_rupture_length or self.do_event_involved_elements:
+        if self.do_event_area or self.do_event_average_slip or self.do_event_surface_rupture_length or self.do_events_by_section:
             self.calculate_additional_data()
 
     def calculate_additional_data(self):
@@ -360,24 +350,27 @@ class VCSimData(object):
         event_table_new.move('/','event_table')
         
         #-----------------------------------------------------------------------
-        # create a new table to store the elements that are involved in each
-        # event
+        # create a new group to store the event ids for each section
         #-----------------------------------------------------------------------
-        if self.do_event_involved_elements:
-            desc = {'event_number':tables.UIntCol(dflt=0.0), 'block_id':tables.UIntCol(dflt=0.0) }
-
-            # create the new table
-            event_blocks_table = self.file.create_table('/', 'event_blocks_table', desc, 'Event Blocks Table')
+        if self.do_events_by_section:
+            events_by_section_group = self.file.create_group("/", 'events_by_section', 'Events on each section')
             
-            # fill the table with the event elements
-            row = event_blocks_table.row
+            # dict to store the events on each section
+            events_by_section = {}
+            
+            # we have the sections involved in each event. we need to transpose
+            # this to events on each section
             for evid, event_data in enumerate(data_process_results_sorted):
-                for eleid in event_data['involved_elements']:
-                    row['event_number'] = evid
-                    row['block_id'] = eleid
-                    row.append()
-            event_blocks_table.flush()
-    
+                for secid in event_data['involved_sections']:
+                    try:
+                        events_by_section[secid].append(evid)
+                    except KeyError:
+                        events_by_section[secid] = [evid]
+            
+            # create an array for each result
+            for secid, evids in events_by_section.iteritems():
+                self.file.create_array(events_by_section_group, 'section_{}'.format(secid), np.array(evids), 'Events on section {}'.format(secid))
+            
         print 'Done! {} seconds'.format(time.time() - table_start_time)
         
         #-----------------------------------------------------------------------
