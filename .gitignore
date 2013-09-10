@@ -41,6 +41,8 @@ vcal_py_*.dat
 siso_test.py
 mptest.py
 test*
+pyvc.py
+pyvc.pth
 
 #########################
 # .gitignore file for Xcode4 / OS X Source projects
