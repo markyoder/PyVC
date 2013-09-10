@@ -22,9 +22,9 @@ def standard_plot(output_file, x, y, legend_loc='best', **kwargs):
     if plot_format != 'png' and plot_format != 'pdf' and plot_format != 'dat':
         raise vcexceptions.PlotFormatNotSupported(plot_format)
     elif plot_format == 'png' or plot_format == 'pdf':
-        #-----------------------------------------------------------------------
-        # plot the data using matplotlib
-        #-----------------------------------------------------------------------
+    #---------------------------------------------------------------------------
+    # plot the data using matplotlib
+    #---------------------------------------------------------------------------
         
         #-----------------------------------------------------------------------
         # set up plot dimensions (all values in pixels)
@@ -108,37 +108,7 @@ def standard_plot(output_file, x, y, legend_loc='best', **kwargs):
         if add_lines is not None:
             for line in add_lines:
                 eval('the_ax.{}(line[\'x\'], line[\'y\'], ls=ls_extra, lw=lw_extra, c=c_extra, label=line[\'label\'])'.format(axis_format), locals())
-
-        '''
-        if axis_format is None:
-            # just do linear linear plot
-            pass
-        elif axis_format == 'semilogx':
-            # semilogx just like it says
-            the_ax.semilogx(x, y, ls=ls_main, mfc=mfc_main, ms=ms_main, marker=mt_main, c=c_main)
-            
-            # plot any additional lines
-            if add_lines is not None:
-                for line in add_lines:
-                    the_ax.semilogx(line['x'], line['y'], ls=ls_extra, lw=lw_extra, c=c_extra, label=line['label'])
-        elif axis_format == 'loglog':
-            # loglog just like it says
-            the_ax.loglog(x, y, ls=ls_main, mfc=mfc_main, ms=ms_main, marker=mt_main, c=c_main)
         
-            
-            # plot any additional lines
-            if add_lines is not None:
-                for line in add_lines:
-                    the_ax.loglog(line['x'], line['y'], ls=ls_extra, lw=lw_extra, c=c_extra, label=line['label'])
-        elif axis_format == 'semilogy':
-            # semilogx just like it says
-            the_ax.semilogy(x, y, ls=ls_main, mfc=mfc_main, ms=ms_main, marker=mt_main, c=c_main)
-            
-            # plot any additional lines
-            if add_lines is not None:
-                for line in add_lines:
-                    the_ax.semilogy(line['x'], line['y'], ls=ls_extra, lw=lw_extra, c=c_extra, label=line['label'])
-        '''
         # set the fonts for the tick labels
         for label in the_ax.xaxis.get_ticklabels()+the_ax.yaxis.get_ticklabels():
             label.set_fontproperties(ticklabelfont)
@@ -161,35 +131,6 @@ def standard_plot(output_file, x, y, legend_loc='best', **kwargs):
 
         # save the plot
         plt.savefig(output_file, format=plot_format, dpi=res)
-
-#-------------------------------------------------------------------------------
-# parse all of the filters and return a string for the plot title
-#-------------------------------------------------------------------------------
-def get_plot_label(sim_file, event_range=None, section_filter=None, magnitude_filter=None):
-    # always say what file it came from
-    label_str = ': from file {}'.format(sim_file)
-    # do the event range
-    if event_range is not None:
-        label_str += ', from {} {}-{}'.format(event_range['type'], event_range['filter'][0], event_range['filter'][1])
-    # do the magnitude filter
-    if magnitude_filter is not None:
-        label_str += ', m {}'.format(magnitude_filter)
-    # do the section filter. this is tricky
-    if section_filter is not None:
-        label_str += ', sections '
-        # section_ids are just numbers so they are small, print more of them
-        if section_filter['type'] == 'section_id':
-            max_sections = 5
-        else:
-            max_sections = 2
-        # if the number of sections is less than our max defined above, print a
-        # comma seperated list. if not, just print the first and last.
-        if len(section_filter['filter']) < max_sections:
-            label_str += ','.join([str(x) for x in section_filter['filter']])
-        else:
-            label_str += '{}...{}'.format(section_filter['filter'][0], section_filter['filter'][-1])
-
-    return label_str
     
 #-------------------------------------------------------------------------------
 # magnitude rupture area plot
@@ -208,11 +149,8 @@ def magnitude_rupture_area(sim_file, output_file, event_range=None, section_filt
         # VCSimData class
         events = VCEvents(sim_data)
         
-        start_time = time.time()
         # get the data
         event_data = events.get_event_data(['event_magnitude', 'event_area'], event_range=event_range, magnitude_filter=magnitude_filter, section_filter=section_filter)
-        total_time = time.time() - start_time
-        print len(event_data['event_magnitude']), total_time
     
     #---------------------------------------------------------------------------
     # Prepare the plot and do it.
@@ -226,7 +164,7 @@ def magnitude_rupture_area(sim_file, output_file, event_range=None, section_filt
     x_ave, y_ave = vcutils.calculate_averages(event_area_kmsq, event_data['event_magnitude'])
     
     # get the plot label which will depend on the filters
-    plot_label = get_plot_label(sim_file, event_range=event_range, section_filter=section_filter, magnitude_filter=magnitude_filter)
+    plot_label = vcutils.get_plot_label(sim_file, event_range=event_range, section_filter=section_filter, magnitude_filter=magnitude_filter)
     
     # do the standard plot
     standard_plot(output_file, event_area_kmsq, event_data['event_magnitude'],
@@ -253,11 +191,8 @@ def magnitude_average_slip(sim_file, output_file, event_range=None, section_filt
         # VCSimData class
         events = VCEvents(sim_data)
         
-        start_time = time.time()
         # get the data
         event_data = events.get_event_data(['event_magnitude', 'event_average_slip'], event_range=event_range, magnitude_filter=magnitude_filter, section_filter=section_filter)
-        total_time = time.time() - start_time
-        print len(event_data['event_magnitude']), total_time
     
     #---------------------------------------------------------------------------
     # Prepare the plot and do it.
@@ -268,7 +203,7 @@ def magnitude_average_slip(sim_file, output_file, event_range=None, section_filt
     x_ave, y_ave = vcutils.calculate_averages(event_data['event_average_slip'], event_data['event_magnitude'])
     
     # get the plot label which will depend on the filters
-    plot_label = get_plot_label(sim_file, event_range=event_range, section_filter=section_filter, magnitude_filter=magnitude_filter)
+    plot_label = vcutils.get_plot_label(sim_file, event_range=event_range, section_filter=section_filter, magnitude_filter=magnitude_filter)
     
     # do the standard plot
     standard_plot(output_file, event_data['event_average_slip'], event_data['event_magnitude'],
@@ -295,11 +230,8 @@ def average_slip_surface_rupture_length(sim_file, output_file, event_range=None,
         # VCSimData class
         events = VCEvents(sim_data)
         
-        start_time = time.time()
         # get the data
         event_data = events.get_event_data(['event_surface_rupture_length', 'event_average_slip'], event_range=event_range, magnitude_filter=magnitude_filter, section_filter=section_filter)
-        total_time = time.time() - start_time
-        print len(event_data['event_surface_rupture_length']), total_time
     
     #---------------------------------------------------------------------------
     # Prepare the plot and do it.
@@ -313,7 +245,7 @@ def average_slip_surface_rupture_length(sim_file, output_file, event_range=None,
     x_ave, y_ave = vcutils.calculate_averages(event_data['event_surface_rupture_length'], event_data['event_average_slip'])
     
     # get the plot label which will depend on the filters
-    plot_label = get_plot_label(sim_file, event_range=event_range, section_filter=section_filter, magnitude_filter=magnitude_filter)
+    plot_label = vcutils.get_plot_label(sim_file, event_range=event_range, section_filter=section_filter, magnitude_filter=magnitude_filter)
     
     # do the standard plot
     standard_plot(output_file, event_data['event_surface_rupture_length'], event_data['event_average_slip'],
@@ -340,11 +272,8 @@ def frequency_magnitude(sim_file, output_file, event_range=None, section_filter=
         # VCSimData class
         events = VCEvents(sim_data)
         
-        start_time = time.time()
         # get the data
         event_data = events.get_event_data(['event_magnitude', 'event_range_duration'], event_range=event_range, magnitude_filter=magnitude_filter, section_filter=section_filter)
-        total_time = time.time() - start_time
-        print len(event_data['event_magnitude']), total_time
     
     #---------------------------------------------------------------------------
     # Prepare the plot and do it.
@@ -373,7 +302,7 @@ def frequency_magnitude(sim_file, output_file, event_range=None, section_filter=
     y_b1 = 10**(math.log(y[0],10)+x[0]-x_b1)
 
     # get the plot label which will depend on the filters
-    plot_label = get_plot_label(sim_file, event_range=event_range, section_filter=section_filter, magnitude_filter=magnitude_filter)
+    plot_label = vcutils.get_plot_label(sim_file, event_range=event_range, section_filter=section_filter, magnitude_filter=magnitude_filter)
     
     # do the standard plot
     standard_plot(output_file, x, y,

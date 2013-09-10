@@ -11,21 +11,35 @@ import math
 import calendar
 from geographiclib.geodesic import Geodesic
 
+#-------------------------------------------------------------------------------
+# A class to perform unit conversions.
+#-------------------------------------------------------------------------------
 class Converter:
         def __init__(self):
                 self.lat0 = 31.5
                 self.lon0 = -126.0
                 self.earth_radius = self.km_m(6371.0)
-        
-        def distanceOnEarthsSurface(self, lat1, lon1, lat2, lon2):
+    
+        #-----------------------------------------------------------------------
+        # Given two lat/lon points return the distance between them in meters.
+        #-----------------------------------------------------------------------
+        def surface_distance(self, lat1, lon1, lat2, lon2):
             conv = Geodesic.WGS84.Inverse(lat1, lon1, lat2, lon2)
             return conv["s12"]
-        
+    
+        #-----------------------------------------------------------------------
+        # Given two lat/lon point return cartesian coords with point 1 at the
+        # origin and the given coords at point 2.
+        #-----------------------------------------------------------------------
         def latlon_xy_2pt(self, lat1, lon1, lat2, lon2):
             conv = Geodesic.WGS84.Inverse(lat1, lon1, lat2, lon2)
             return (conv["s12"]*math.sin(self.deg_rad(conv["azi1"])), conv["s12"]*math.cos(self.deg_rad(conv["azi1"])))
-        
-        def yearDecimalToYearMonthDay(self,yearDecimal,time=False):
+    
+        #-----------------------------------------------------------------------
+        # Convert a year given in decimal format (ie. 4.234) and return the
+        # year, month, day and optionaly hour, minute, second, fractional second
+        #-----------------------------------------------------------------------
+        def yearDecimal_YearMonthDay(self,yearDecimal,time=False):
                 decimal, year = math.modf(yearDecimal)
                 decimal, month = math.modf(12.0*decimal)
                 decimal, day = math.modf(calendar.monthrange(1972, int(month + 1))[1]*decimal)
@@ -37,48 +51,66 @@ class Converter:
                     return int(year), int(month + 1), int(day + 1), int(hour), int(minute), int(second), decimal
                 else:
                     return int(year), int(month + 1), int(day + 1)
-        
+    
+        #-----------------------------------------------------------------------
+        # Convert years to seconds.
+        #-----------------------------------------------------------------------
         def year_sec(self, year):
             return 365.0 * 24.0 * 60.0 * 60.0 * year
         
+        #-----------------------------------------------------------------------
+        # Convert seconds to years.
+        #-----------------------------------------------------------------------
         def sec_year(self, sec):
             return (1.0/365.0) * (1.0/24.0) * (1.0/60.0) * (1.0/60.0) * sec
-            
+        
+        #-----------------------------------------------------------------------
+        # Convert kilometers to meters.
+        #-----------------------------------------------------------------------
         def km_m(self, km):
             return km * 10.0**(3.0)
         
+        #-----------------------------------------------------------------------
+        # Convert meters to kilometers.
+        #-----------------------------------------------------------------------
         def m_km(self, m):
             return m * 10.0**(-3.0)
-
+        
+        #-----------------------------------------------------------------------
+        # Convert meters squared to kilometers squared.
+        #-----------------------------------------------------------------------
         def msq_kmsq(self, msq):
             return msq * 1000.0**(-2.0)
         
+        #-----------------------------------------------------------------------
+        # Convert degrees to radians.
+        #-----------------------------------------------------------------------
         def deg_rad(self, deg):
             return deg * (math.pi/180.0)
         
+        #-----------------------------------------------------------------------
+        # Convert radians to degrees.
+        #-----------------------------------------------------------------------
         def rad_deg(self, rad):
             return rad * (180.0/math.pi)
-    
-        def setLatLon0(self, lat0, lon0):
+        
+        #-----------------------------------------------------------------------
+        # Set the lat and lon to serve as the zero location.
+        #-----------------------------------------------------------------------
+        def set_latlon0(self, lat0, lon0):
             self.lat0 = lat0
             self.lon0 = lon0
-
+        
+        #-----------------------------------------------------------------------
+        # Convert a lat/lon point to cartesian coords relative to lat0/lon0.
+        #-----------------------------------------------------------------------
         def latlon_xy(self, lat, lon):
             conv = Geodesic.WGS84.Inverse(self.lat0, self.lon0, lat, lon)
             return (conv["s12"]*math.sin(self.deg_rad(conv["azi1"])), conv["s12"]*math.cos(self.deg_rad(conv["azi1"])))
-            
-        def latlon_xy_old(self, lat, lon):
-            x = self.arclen((self.lat0, self.lon0), (self.lat0, lon))
-            y = self.arclen((self.lat0,0),(lat,0))
-            
-            if (lon < self.lon0):
-                x *= -1
-            
-            if (lat < self.lat0):
-                y *= -1
-            
-            return (x,y)
-
+        
+        #-----------------------------------------------------------------------
+        # Convert x/y points to lat/lon relative to lat0/lon0.
+        #-----------------------------------------------------------------------
         def xy_latlon(self, x, y):
             s12 = (x**2.0 + y**2.0)**(0.5)
             azi1 = self.rad_deg(math.atan2(x,y))
@@ -86,28 +118,38 @@ class Converter:
             
             return (conv["lat2"], conv["lon2"])
             
-        def xy_latlon_old(self, x, y):
-            
-            new_lat = self.rad_deg(y/self.earth_radius)+self.lat0;
+#-------------------------------------------------------------------------------
+# parse all of the filters and return a string for the plot title
+#-------------------------------------------------------------------------------
+def get_plot_label(sim_file, event_range=None, section_filter=None, magnitude_filter=None):
+    # always say what file it came from
+    label_str = ': from file {}'.format(sim_file)
+    # do the event range
+    if event_range is not None:
+        label_str += ', from {} {}-{}'.format(event_range['type'], event_range['filter'][0], event_range['filter'][1])
+    # do the magnitude filter
+    if magnitude_filter is not None:
+        label_str += ', m {}'.format(magnitude_filter)
+    # do the section filter. this is tricky
+    if section_filter is not None:
+        label_str += ', sections '
+        # section_ids are just numbers so they are small, print more of them
+        if section_filter['type'] == 'section_id':
+            max_sections = 5
+        else:
+            max_sections = 2
+        # if the number of sections is less than our max defined above, print a
+        # comma seperated list. if not, just print the first and last.
+        if len(section_filter['filter']) < max_sections:
+            label_str += ','.join([str(x) for x in section_filter['filter']])
+        else:
+            label_str += '{}...{}'.format(section_filter['filter'][0], section_filter['filter'][-1])
 
-            new_lon = 2.0 * self.rad_deg(math.asin(math.sin(x/(2.0 * self.earth_radius))/math.cos(self.deg_rad(new_lat))))+self.lon0;
+    return label_str
 
-            return new_lat,new_lon
-
-        def arclen(self, pt1, pt2):
-            # pts are always (lat,lon)
-
-            dlon = self.deg_rad(pt2[1]-pt1[1])
-            dlat = self.deg_rad(pt2[0]-pt1[0])
-            lat1 = self.deg_rad(pt1[0])
-            lat2 = self.deg_rad(pt2[0])
-
-            a = math.sin(dlat/2.0)**2.0 + math.cos(lat1)*math.cos(lat2)*( math.sin(dlon/2.0)**2.0 )
-            c = 2.0*math.atan2(math.sqrt(a), math.sqrt(1.0-a))
-            d = self.earth_radius*c
-
-            return d
-
+#-------------------------------------------------------------------------------
+# calculate binned averages for scatter plots with the x-axis plotted in logpace
+#-------------------------------------------------------------------------------
 def calculate_averages(x,y):
     num_bins = math.floor(len(x)/100)
     
@@ -145,6 +187,11 @@ def calculate_averages(x,y):
 
     return x_ave, y_ave
 
+#-------------------------------------------------------------------------------
+# A class for processing event data in parallel. This is only used if a
+# simulation is being analyzed for the first time. The quantities calculated
+# here are saved in the simulation file.
+#-------------------------------------------------------------------------------
 class EventDataProcessor(multiprocessing.Process):
     def __init__(self, sim_file_path, work_queue, result_queue):
  
@@ -190,28 +237,30 @@ class EventDataProcessor(multiprocessing.Process):
                 involved_sections = []
                 for sweep in sweep_table[event_table[evnum]['start_sweep_rec']:event_table[evnum]['end_sweep_rec']]:
                     eleid = sweep['block_id']
-                    #trace_sum = block_info_table[eleid]['m_trace_flag_pt1'] + block_info_table[eleid]['m_trace_flag_pt2'] + block_info_table[eleid]['m_trace_flag_pt3'] + block_info_table[eleid]['m_trace_flag_pt4']
-                    
                     if block_info_table[eleid]['m_trace_flag_pt1'] > 0:
-                        #pt1 = (block_info_table[eleid]['m_x_pt1'], block_info_table[eleid]['m_y_pt1'], block_info_table[eleid]['m_z_pt1'])
-                        #pt4 = (block_info_table[eleid]['m_x_pt4'], block_info_table[eleid]['m_y_pt4'], block_info_table[eleid]['m_z_pt4'])
                         surface_rupture_length += (sum((x-y)**2.0 for x, y in itertools.izip(pt1getter(block_info_table[eleid]),pt4getter(block_info_table[eleid]))))**0.5
                     
                     involved_sections.append(block_info_table[eleid]['section_id'])
                     areas[eleid] = sweep['area']
                     total_slip += sweep['slip']
                     slip_records += 1
-                #print areas.keys()
+        
                 results[evnum] = {'average_slip':total_slip/float(slip_records), 'area':sum(areas.values()), 'surface_rupture_length':surface_rupture_length, 'involved_sections':set(involved_sections)}
             
-                #event_elements[i] = set(events.get_event_elements(i))
-            
-           
             self.result_queue.put(results)
         
         self.sim_file.close()
 
-
+#-------------------------------------------------------------------------------
+# A class that manages the connection to a simulation data file. This class
+# should be used within a with statement. For example:
+#
+# with VCSimData() as sim_data:
+#     [do stuff with sim_data]
+#
+# This ensures that the __exit__ method is called and the file is closed when no
+# longer needed.
+#-------------------------------------------------------------------------------
 class VCSimData(object):
     def __init__(self, file_path=None):
         self.file = None
@@ -237,6 +286,9 @@ class VCSimData(object):
             self.file_path = file_path
         self.file = tables.open_file(self.file_path)
         
+        #-----------------------------------------------------------------------
+        # check to see if we need to calculate additional data
+        #-----------------------------------------------------------------------
         if 'event_area' not in self.file.root.event_table.colnames:
             self.do_event_area = True
 

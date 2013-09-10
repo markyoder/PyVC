@@ -1,17 +1,15 @@
 import pprint
 
-'''
-A subclass of the Exception class to handle bad increment input in the daterange generator
-'''
+#-------------------------------------------------------------------------------
+# Custom exceptions for VC analysis.
+#-------------------------------------------------------------------------------
+
 class SimFileDoesNotExist(Exception):
     def __init__(self, code):
         self.code = code
     def __str__(self):
         return 'The simulation file {} cannot be found.'.format(self.code)
 
-'''
-A subclass of the Exception class to handle bad increment input in the daterange generator
-'''
 class SimFileNotHDF5(Exception):
     def __init__(self, code):
         self.code = code
