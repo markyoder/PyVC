@@ -7,6 +7,8 @@
 	objects = {
 
 /* Begin PBXFileReference section */
+		B814514C17DF78100022664B /* LICENSE */ = {isa = PBXFileReference; lastKnownFileType = text; path = LICENSE; sourceTree = "<group>"; };
+		B814514D17DF78100022664B /* README.md */ = {isa = PBXFileReference; lastKnownFileType = text; path = README.md; sourceTree = "<group>"; };
 		B82A846E17D8FDE1000B1EF4 /* sandbox.py */ = {isa = PBXFileReference; lastKnownFileType = text.script.python; path = sandbox.py; sourceTree = "<group>"; };
 		B82FAEEA17DE904C008A9BA2 /* pyvc_tests.py */ = {isa = PBXFileReference; lastKnownFileType = text.script.python; path = pyvc_tests.py; sourceTree = "<group>"; };
 		B830942017D7F36B003F6D3A /* mptest.py */ = {isa = PBXFileReference; lastKnownFileType = text.script.python; path = mptest.py; sourceTree = "<group>"; };
@@ -15,11 +17,11 @@
 		B8D0978B178B43390006310A /* siso_test.py */ = {isa = PBXFileReference; fileEncoding = 4; lastKnownFileType = text.script.python; path = siso_test.py; sourceTree = "<group>"; };
 		B8EFC34317CFC2CD006B4107 /* pyvc.pth */ = {isa = PBXFileReference; fileEncoding = 4; lastKnownFileType = text; path = pyvc.pth; sourceTree = "<group>"; };
 		B8EFC34417CFC2CD006B4107 /* pyvc.py */ = {isa = PBXFileReference; fileEncoding = 4; lastKnownFileType = text.script.python; path = pyvc.py; sourceTree = "<group>"; };
-		B8EFC34617CFC5FA006B4107 /* Chaos.py */ = {isa = PBXFileReference; fileEncoding = 4; lastKnownFileType = text.script.python; path = Chaos.py; sourceTree = "<group>"; };
-		B8EFC34717CFC5FA006B4107 /* Converter.py */ = {isa = PBXFileReference; fileEncoding = 4; lastKnownFileType = text.script.python; path = Converter.py; sourceTree = "<group>"; };
-		B8EFC34817CFC5FA006B4107 /* MyVector.py */ = {isa = PBXFileReference; fileEncoding = 4; lastKnownFileType = text.script.python; path = MyVector.py; sourceTree = "<group>"; };
-		B8EFC34917CFC5FA006B4107 /* Utils.py */ = {isa = PBXFileReference; fileEncoding = 4; lastKnownFileType = text.script.python; path = Utils.py; sourceTree = "<group>"; };
-		B8EFC34A17CFC5FA006B4107 /* VC.py */ = {isa = PBXFileReference; fileEncoding = 4; lastKnownFileType = text.script.python; path = VC.py; sourceTree = "<group>"; };
+		B8EFC34617CFC5FA006B4107 /* Chaos.py */ = {isa = PBXFileReference; fileEncoding = 4; lastKnownFileType = text.script.python; name = Chaos.py; path = pyvc/Chaos.py; sourceTree = "<group>"; };
+		B8EFC34717CFC5FA006B4107 /* Converter.py */ = {isa = PBXFileReference; fileEncoding = 4; lastKnownFileType = text.script.python; name = Converter.py; path = pyvc/Converter.py; sourceTree = "<group>"; };
+		B8EFC34817CFC5FA006B4107 /* MyVector.py */ = {isa = PBXFileReference; fileEncoding = 4; lastKnownFileType = text.script.python; name = MyVector.py; path = pyvc/MyVector.py; sourceTree = "<group>"; };
+		B8EFC34917CFC5FA006B4107 /* Utils.py */ = {isa = PBXFileReference; fileEncoding = 4; lastKnownFileType = text.script.python; name = Utils.py; path = pyvc/Utils.py; sourceTree = "<group>"; };
+		B8EFC34A17CFC5FA006B4107 /* VC.py */ = {isa = PBXFileReference; fileEncoding = 4; lastKnownFileType = text.script.python; name = VC.py; path = pyvc/VC.py; sourceTree = "<group>"; };
 		B8EFC34B17CFC629006B4107 /* vcsys.py */ = {isa = PBXFileReference; fileEncoding = 4; lastKnownFileType = text.script.python; path = vcsys.py; sourceTree = "<group>"; };
 		B8EFC34C17CFC6B1006B4107 /* vcgeometry.py */ = {isa = PBXFileReference; fileEncoding = 4; lastKnownFileType = text.script.python; path = vcgeometry.py; sourceTree = "<group>"; };
 		B8EFC34D17CFC785006B4107 /* vcevents.py */ = {isa = PBXFileReference; fileEncoding = 4; lastKnownFileType = text.script.python; path = vcevents.py; sourceTree = "<group>"; };
@@ -30,17 +32,40 @@
 /* End PBXFileReference section */
 
 /* Begin PBXGroup section */
-		B8948A021385A580008946E8 = {
+		B814514A17DF77CB0022664B /* local */ = {
 			isa = PBXGroup;
 			children = (
-				B82FAEEA17DE904C008A9BA2 /* pyvc_tests.py */,
-				B82A846E17D8FDE1000B1EF4 /* sandbox.py */,
 				B830942017D7F36B003F6D3A /* mptest.py */,
+				B82A846E17D8FDE1000B1EF4 /* sandbox.py */,
 				B8EFC34317CFC2CD006B4107 /* pyvc.pth */,
 				B8EFC34417CFC2CD006B4107 /* pyvc.py */,
 				B8D0978B178B43390006310A /* siso_test.py */,
 				B88584B11423C41B003DC67F /* vcal_py_options_example.dat */,
 				B8B11F9914BFA11A00147EDC /* vcal_py_trace_file_example.dat */,
+				B8EFC34617CFC5FA006B4107 /* Chaos.py */,
+				B8EFC34717CFC5FA006B4107 /* Converter.py */,
+				B8EFC34817CFC5FA006B4107 /* MyVector.py */,
+				B8EFC34917CFC5FA006B4107 /* Utils.py */,
+				B8EFC34A17CFC5FA006B4107 /* VC.py */,
+			);
+			name = local;
+			sourceTree = "<group>";
+		};
+		B814514B17DF77FA0022664B /* other */ = {
+			isa = PBXGroup;
+			children = (
+				B814514C17DF78100022664B /* LICENSE */,
+				B814514D17DF78100022664B /* README.md */,
+			);
+			name = other;
+			sourceTree = "<group>";
+		};
+		B8948A021385A580008946E8 = {
+			isa = PBXGroup;
+			children = (
+				B814514B17DF77FA0022664B /* other */,
+				B814514A17DF77CB0022664B /* local */,
+				B82FAEEA17DE904C008A9BA2 /* pyvc_tests.py */,
 				B8EFC34517CFC5FA006B4107 /* pyvc */,
 			);
 			sourceTree = "<group>";
@@ -48,11 +73,6 @@
 		B8EFC34517CFC5FA006B4107 /* pyvc */ = {
 			isa = PBXGroup;
 			children = (
-				B8EFC34617CFC5FA006B4107 /* Chaos.py */,
-				B8EFC34717CFC5FA006B4107 /* Converter.py */,
-				B8EFC34817CFC5FA006B4107 /* MyVector.py */,
-				B8EFC34917CFC5FA006B4107 /* Utils.py */,
-				B8EFC34A17CFC5FA006B4107 /* VC.py */,
 				B8EFC34B17CFC629006B4107 /* vcsys.py */,
 				B8EFC34C17CFC6B1006B4107 /* vcgeometry.py */,
 				B8EFC34D17CFC785006B4107 /* vcevents.py */,
