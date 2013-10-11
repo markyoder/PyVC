@@ -12,7 +12,7 @@ To see what the new PyVC can do, run python pyvc_tests.py from the command line.
 == DEPENDENCIES ==
 
 python 2.7 
-PyTables 
+PyTables 3.XX
 matplotlib 
 numpy 
 geographiclib
