@@ -25,7 +25,8 @@ class VCEvents(VCSys):
         return self.event_data[evnum]['event_year']
     
     def get_event_elements(self, evnum):
-        return set([x['block_id'] for x in self.sweep_data[self.event_data[evnum]['start_sweep_rec']:self.event_data[evnum]['end_sweep_rec']]])
+        #return set([x['block_id'] for x in self.sweep_data[self.event_data[evnum]['start_sweep_rec']:self.event_data[evnum]['end_sweep_rec']]])
+        return set(self.sweep_data.read(self.event_data[evnum]['start_sweep_rec'],self.event_data[evnum]['end_sweep_rec'], field='block_id'))
     
     def get_event_slip_area(self, evnum):
         areas = {}
@@ -146,14 +147,10 @@ class VCEvents(VCSys):
             if len(eligible_evids) == 1:
                 event = self.event_data[eligible_evids[0]]
                 if magnitude_filter is not None:
-                    if eval('event_magnitude {}'.format(magnitude_filter), {'event_magnitude':event['event_magnitude']}):
-                        for col_name in requested_data:
-                            event_data[col_name].append(event[col_name])
-                    else:
-                        raise vcexceptions.NoEventsFound(event_range=event_range, magnitude_filter=magnitude_filter, section_filter=section_filter)
+                    exp_as_func = eval('lambda mag: ' + 'mag {}'.format(magnitude_filter))
+                    self.process_events(event_data, requested_data, event, exp_as_func)
                 else:
-                    for col_name in requested_data:
-                            event_data[col_name].append(event[col_name])
+                    self.process_events(event_data, requested_data, event)
             else:
                 # an itemgetter for our (potentially) non contiguous event ids
                 ev_getter = itemgetter(*eligible_evids)
@@ -161,14 +158,9 @@ class VCEvents(VCSys):
                 # only apply the magnitude filter if necessary
                 if magnitude_filter is not None:
                     exp_as_func = eval('lambda mag: ' + 'mag {}'.format(magnitude_filter))
-                    for event in ev_getter(self.event_data):
-                        if exp_as_func(event['event_magnitude']):
-                            for col_name in requested_data:
-                                event_data[col_name].append(event[col_name])
+                    self.process_events(event_data, requested_data, ev_getter(self.event_data), exp_as_func)
                 else:
-                    for event in ev_getter(self.event_data):
-                        for col_name in requested_data:
-                            event_data[col_name].append(event[col_name])
+                    self.process_events(event_data, requested_data, ev_getter(self.event_data))
         else:
             #-------------------------------------------------------------------
             # If there is no section filter life is good. PyTables makes this
@@ -184,10 +176,8 @@ class VCEvents(VCSys):
 
             if magnitude_filter is not None:
                 query_str += ' & (event_magnitude {})'.format(magnitude_filter)
-            
-            for event in self.event_data.where(query_str):
-                for col_name in requested_data:
-                    event_data[col_name].append(event[col_name])
+                
+            self.process_events(event_data, requested_data, self.event_data.where(query_str))
         
         # get the event range duration if requested
         if get_event_range_duration:
@@ -196,4 +186,23 @@ class VCEvents(VCSys):
             event_data['event_range_duration'] = self.get_event_year(ev_stop) - self.get_event_year(ev_start)
     
         return event_data
+
+    def process_events(self, event_data, requested_data, event_iterable, magnitude_filter=None):
+        if magnitude_filter is not None:
+            for event in event_iterable:
+                if magnitude_filter(event['event_magnitude']):
+                    for col_name in requested_data:
+                        if col_name == 'event_elements':
+                            event_data[col_name].append(self.get_event_elements(event['event_number']))
+                        else:
+                            event_data[col_name].append(event[col_name])
+        else:
+            for event in event_iterable:
+                for col_name in requested_data:
+                    if col_name == 'event_elements':
+                        event_data[col_name].append(self.get_event_elements(event['event_number']))
+                    else:
+                        event_data[col_name].append(event[col_name])
+
+
     

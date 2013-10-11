@@ -14,14 +14,8 @@
 		B830942017D7F36B003F6D3A /* mptest.py */ = {isa = PBXFileReference; lastKnownFileType = text.script.python; path = mptest.py; sourceTree = "<group>"; };
 		B88584B11423C41B003DC67F /* vcal_py_options_example.dat */ = {isa = PBXFileReference; fileEncoding = 4; lastKnownFileType = text; path = vcal_py_options_example.dat; sourceTree = "<group>"; };
 		B8B11F9914BFA11A00147EDC /* vcal_py_trace_file_example.dat */ = {isa = PBXFileReference; fileEncoding = 4; lastKnownFileType = text; path = vcal_py_trace_file_example.dat; sourceTree = "<group>"; };
+		B8C068DD1805C3E000B3A3E7 /* VC.py */ = {isa = PBXFileReference; lastKnownFileType = text.script.python; path = VC.py; sourceTree = "<group>"; };
 		B8D0978B178B43390006310A /* siso_test.py */ = {isa = PBXFileReference; fileEncoding = 4; lastKnownFileType = text.script.python; path = siso_test.py; sourceTree = "<group>"; };
-		B8EFC34317CFC2CD006B4107 /* pyvc.pth */ = {isa = PBXFileReference; fileEncoding = 4; lastKnownFileType = text; path = pyvc.pth; sourceTree = "<group>"; };
-		B8EFC34417CFC2CD006B4107 /* pyvc.py */ = {isa = PBXFileReference; fileEncoding = 4; lastKnownFileType = text.script.python; path = pyvc.py; sourceTree = "<group>"; };
-		B8EFC34617CFC5FA006B4107 /* Chaos.py */ = {isa = PBXFileReference; fileEncoding = 4; lastKnownFileType = text.script.python; name = Chaos.py; path = pyvc/Chaos.py; sourceTree = "<group>"; };
-		B8EFC34717CFC5FA006B4107 /* Converter.py */ = {isa = PBXFileReference; fileEncoding = 4; lastKnownFileType = text.script.python; name = Converter.py; path = pyvc/Converter.py; sourceTree = "<group>"; };
-		B8EFC34817CFC5FA006B4107 /* MyVector.py */ = {isa = PBXFileReference; fileEncoding = 4; lastKnownFileType = text.script.python; name = MyVector.py; path = pyvc/MyVector.py; sourceTree = "<group>"; };
-		B8EFC34917CFC5FA006B4107 /* Utils.py */ = {isa = PBXFileReference; fileEncoding = 4; lastKnownFileType = text.script.python; name = Utils.py; path = pyvc/Utils.py; sourceTree = "<group>"; };
-		B8EFC34A17CFC5FA006B4107 /* VC.py */ = {isa = PBXFileReference; fileEncoding = 4; lastKnownFileType = text.script.python; name = VC.py; path = pyvc/VC.py; sourceTree = "<group>"; };
 		B8EFC34B17CFC629006B4107 /* vcsys.py */ = {isa = PBXFileReference; fileEncoding = 4; lastKnownFileType = text.script.python; path = vcsys.py; sourceTree = "<group>"; };
 		B8EFC34C17CFC6B1006B4107 /* vcgeometry.py */ = {isa = PBXFileReference; fileEncoding = 4; lastKnownFileType = text.script.python; path = vcgeometry.py; sourceTree = "<group>"; };
 		B8EFC34D17CFC785006B4107 /* vcevents.py */ = {isa = PBXFileReference; fileEncoding = 4; lastKnownFileType = text.script.python; path = vcevents.py; sourceTree = "<group>"; };
@@ -37,16 +31,10 @@
 			children = (
 				B830942017D7F36B003F6D3A /* mptest.py */,
 				B82A846E17D8FDE1000B1EF4 /* sandbox.py */,
-				B8EFC34317CFC2CD006B4107 /* pyvc.pth */,
-				B8EFC34417CFC2CD006B4107 /* pyvc.py */,
 				B8D0978B178B43390006310A /* siso_test.py */,
 				B88584B11423C41B003DC67F /* vcal_py_options_example.dat */,
 				B8B11F9914BFA11A00147EDC /* vcal_py_trace_file_example.dat */,
-				B8EFC34617CFC5FA006B4107 /* Chaos.py */,
-				B8EFC34717CFC5FA006B4107 /* Converter.py */,
-				B8EFC34817CFC5FA006B4107 /* MyVector.py */,
-				B8EFC34917CFC5FA006B4107 /* Utils.py */,
-				B8EFC34A17CFC5FA006B4107 /* VC.py */,
+				B8C068DD1805C3E000B3A3E7 /* VC.py */,
 			);
 			name = local;
 			sourceTree = "<group>";

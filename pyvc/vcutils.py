@@ -270,6 +270,8 @@ class VCSimData(object):
         self.do_event_average_slip = False
         self.do_event_surface_rupture_length = False
         self.do_events_by_section = False
+        self.do_das_id = False
+        self.do_depth_id = False
         
         if self.file_path is not None:
             self.open_file(self.file_path)
@@ -302,9 +304,117 @@ class VCSimData(object):
             self.do_events_by_section = True
         
         if self.do_event_area or self.do_event_average_slip or self.do_event_surface_rupture_length or self.do_events_by_section:
-            self.calculate_additional_data()
+            self.calculate_additional_event_data()
 
-    def calculate_additional_data(self):
+        if 'das_id' not in self.file.root.block_info_table.colnames:
+            self.do_das_id = True
+        
+        if 'depth_id' not in self.file.root.block_info_table.colnames:
+            self.do_depth_id = True
+        
+        if self.do_das_id or self.do_depth_id:
+            self.calculate_additional_block_data()
+
+    def calculate_additional_block_data(self):
+        #-----------------------------------------------------------------------
+        # get info from the original file
+        #-----------------------------------------------------------------------
+        block_info_table = self.file.root.block_info_table
+    
+        #-----------------------------------------------------------------------
+        # get the new block data
+        #-----------------------------------------------------------------------
+        print 'Calculating new block data'
+        
+        start_time = time.time()
+        
+        das_ids = []
+        depth_ids = []
+        
+        curr_das = None
+        curr_sec = None
+        for block in block_info_table:
+            sec = block['section_id']
+            das = block['m_das_pt1']
+            if sec != curr_sec:
+                #new sec
+                curr_sec = sec
+                das_id = -1
+                depth_id = -1
+            if das != curr_das:
+                #new das
+                curr_das = das
+                das_id += 1
+                depth_id = -1
+            depth_id += 1
+            das_ids.append(das_id)
+            depth_ids.append(depth_id)
+    
+        print 'Done! {} seconds'.format(time.time() - start_time)
+        
+        print 'Creating new tables'
+        table_start_time = time.time()
+        #-----------------------------------------------------------------------
+        # create the new block_info_table
+        #-----------------------------------------------------------------------
+        #close the current file
+        self.file.close()
+        #reopen the file with the append flag set
+        self.file = tables.open_file(self.file_path, 'a')
+        block_info_table = self.file.root.block_info_table
+        
+        # get a description of table in dictionary format
+        desc_orig = block_info_table.description._v_colObjects
+        desc_new = desc_orig.copy()
+        
+        # add columns to description
+        if self.do_das_id:
+            desc_new['das_id'] = tables.UIntCol(dflt=0)
+        
+        if self.do_depth_id:
+            desc_new['depth_id'] = tables.UIntCol(dflt=0)
+        
+        # create a new table with the new description
+        block_info_table_new = self.file.create_table('/', 'tmp', desc_new, 'Block Info Table')
+        
+        # copy the user attributes
+        block_info_table.attrs._f_copy(block_info_table_new)
+        
+        # fill the rows of new table with default values
+        for i in xrange(block_info_table.nrows):
+            block_info_table_new.row.append()
+        
+        # flush the rows to disk
+        block_info_table_new.flush()
+        
+        # copy the columns of source table to destination
+        for col in desc_orig:
+            getattr(block_info_table_new.cols, col)[:] = getattr(block_info_table.cols, col)[:]
+
+        # fill the new columns
+        if self.do_das_id:
+            block_info_table_new.cols.das_id[:] = das_ids
+        
+        if self.do_depth_id:
+            block_info_table_new.cols.depth_id[:] = depth_ids
+        	
+        # remove the original table
+        block_info_table.remove()
+        
+        # move table2 to table
+        block_info_table_new.move('/','block_info_table')
+        
+        print 'Done! {} seconds'.format(time.time() - table_start_time)
+        
+        #-----------------------------------------------------------------------
+        # close the file and reopen it with the new tables
+        #-----------------------------------------------------------------------
+        self.file.close()
+        self.file = tables.open_file(self.file_path)
+    
+        print 'Total time {} seconds'.format(time.time() - start_time)
+    
+    def calculate_additional_event_data(self):
         #-----------------------------------------------------------------------
         # get info from the original file
         #-----------------------------------------------------------------------
@@ -313,9 +423,9 @@ class VCSimData(object):
         self.file.close()
         
         #-----------------------------------------------------------------------
-        # get the new data
+        # get the new event data
         #-----------------------------------------------------------------------
-        print 'Calculating new data'
+        print 'Calculating new event data'
         
         start_time = time.time()
         num_processes = multiprocessing.cpu_count()
