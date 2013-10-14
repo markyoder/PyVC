@@ -5,6 +5,11 @@ import multiprocessing
 from operator import itemgetter
 import time
 import itertools
+import matplotlib.pyplot as mplt
+import matplotlib.font_manager as mfont
+import matplotlib.lines as mlines
+import matplotlib.colors as mcolor
+import matplotlib.colorbar as mcolorbar
 import numpy as np
 
 import math
@@ -188,6 +193,543 @@ def calculate_averages(x,y):
     return x_ave, y_ave
 
 #-------------------------------------------------------------------------------
+# standard plotting routine for scaling plots
+#-------------------------------------------------------------------------------
+def standard_plot(output_file, x, y, legend_loc='best', **kwargs):
+    add_lines = kwargs.get('add_lines')
+    axis_labels = kwargs.get('axis_labels')
+    plot_label = kwargs.get('plot_label')
+    connect_points = kwargs.get('connect_points')
+    axis_format = kwargs.get('axis_format')
+
+    plot_format = output_file.split('.')[-1]
+    if plot_format != 'png' and plot_format != 'pdf' and plot_format != 'dat':
+        raise vcexceptions.PlotFormatNotSupported(plot_format)
+    elif plot_format == 'png' or plot_format == 'pdf':
+    #---------------------------------------------------------------------------
+    # plot the data using matplotlib
+    #---------------------------------------------------------------------------
+        
+        #-----------------------------------------------------------------------
+        # set up plot dimensions (all values in pixels)
+        #-----------------------------------------------------------------------
+        # the full image width
+        imw = 501.0
+        # the full image height
+        imh = 501.0 
+        # the left margin and bottom margin
+        if axis_labels is not None:
+            lm = 45.0
+            bm = 45.0
+        else:
+            lm = 10.0
+            bm = 10.0
+        # the right margin
+        rm = 10.0 
+        # the top margin
+        if plot_label is not None:
+            tm = 30.0
+        else:
+            tm = 10.0
+        # the plot resolution
+        res = 72.0
+
+        #-----------------------------------------------------------------------
+        # set up the plot styles
+        #-----------------------------------------------------------------------
+        # the marker face color for the main plot
+        mfc_main = (0,0,0,1)
+        # the marker size for the main plot
+        ms_main = 3.0
+        # the marker type for the main plot
+        mt_main = 'o'
+        # the line style for the main plot
+        if connect_points is not None:
+            ls_main = '--'
+        else:
+            ls_main = 'None'
+        # the line color for the main plot
+        c_main = (0,0,0,1)
+        # styles for additional sub plots
+        if add_lines is not None:
+            # the line style for the extra lines
+            ls_extra = '-'
+            # the line weight for the extra lines
+            lw_extra = 4.0
+            # the line color for the extra lines
+            c_extra = (0.5,0.5,0.5,1)
+    
+        #-----------------------------------------------------------------------
+        # set up the plot fonts
+        #-----------------------------------------------------------------------
+        ticklabelfont = mfont.FontProperties(family='Arial', style='normal', variant='normal', size=9)
+        framelabelfont = mfont.FontProperties(family='Arial', style='normal', variant='normal', size=10)
+        legendfont = mfont.FontProperties(family='Arial', style='normal', variant='normal', size=10)
+        if len(plot_label) > 100:
+            title_size = 9
+        elif len(plot_label) <= 100 and len(plot_label) > 89:
+            title_size = 10
+        elif len(plot_label) <= 89 and len(plot_label) > 50:
+            title_size = 11
+        else:
+            title_size = 12
+        titlefont = mfont.FontProperties(family='Arial', style='normal', variant='normal', size=title_size)
+        
+        #-----------------------------------------------------------------------
+        # do the plot
+        #-----------------------------------------------------------------------
+        # calculate the final dimensions and create the figure and axis
+        imwi = imw/res
+        imhi = imh/res
+        pw = imw - lm - rm
+        ph = imh - tm - bm
+        fig = mplt.figure(figsize=(imwi, imhi), dpi=res)
+        the_ax = fig.add_axes((lm/imw, bm/imh, pw/imw, ph/imh))
+        
+        # the main plotting routines
+        eval('the_ax.{}(x, y, ls=ls_main, mfc=mfc_main, ms=ms_main, marker=mt_main, c=c_main)'.format(axis_format), locals())
+        # plot any additional lines
+        if add_lines is not None:
+            for line in add_lines:
+                eval('the_ax.{}(line[\'x\'], line[\'y\'], ls=ls_extra, lw=lw_extra, c=c_extra, label=line[\'label\'])'.format(axis_format), locals())
+        
+        # set the fonts for the tick labels
+        for label in the_ax.xaxis.get_ticklabels()+the_ax.yaxis.get_ticklabels():
+            label.set_fontproperties(ticklabelfont)
+        
+        # label the axes
+        if axis_labels is not None:
+            the_ax.set_ylabel(axis_labels['y'], fontproperties=framelabelfont)
+            the_ax.set_xlabel(axis_labels['x'], fontproperties=framelabelfont)
+
+        # label the plot
+        if plot_label is not None:
+            the_ax.set_title(plot_label, fontproperties=titlefont, x=0, y=1, ha='left')
+
+        # clean up the final plot
+        the_ax.autoscale_view(tight=True)
+        
+        # create a legend if we have extra lines
+        if add_lines is not None:
+            the_ax.legend(prop=legendfont, loc=legend_loc)
+
+        # save the plot
+        mplt.savefig(output_file, format=plot_format, dpi=res)
+
+#-------------------------------------------------------------------------------
+# a class to manage the space-time plot
+#-------------------------------------------------------------------------------
+class VCSpaceTimePlot(object):
+    #---------------------------------------------------------------------------
+    # y_axis_data_size is the number of years in the plot, or if event_time is
+    # true it is the number of events.
+    #---------------------------------------------------------------------------
+    def __init__(self, output_file, x_axis_data_size, y_axis_data_size, max_depth, min_mag, max_mag, start_year, max_label_len, event_time=False, lite_init=False):
+        if lite_init:
+            self.cmap = mplt.get_cmap('autumn_r',lut=1000)
+            self.x_axis_data_size = x_axis_data_size
+            self.max_mag = max_mag
+            self.min_mag = min_mag
+            self.mag_slope = 1.0/(self.max_mag - self.min_mag)
+            self.event_lines = []
+        else:
+            # store the output file
+            self.output_file = output_file
+            # store the max depth. this is in number of blocks
+            self.max_depth = max_depth
+            # store the x and y axis data size
+            self.x_axis_data_size = x_axis_data_size
+            self.y_axis_data_size = y_axis_data_size
+            # store the min and max magnitudes
+            self.max_mag = max_mag
+            self.min_mag = min_mag
+            # calculate the slope of the magnitude color ramp
+            self.mag_slope = 1.0/(self.max_mag - self.min_mag)
+            # store the max label length used to calculate the top margin
+            self.max_label_len = max_label_len
+            # set the start and end year
+            self.start_year = start_year
+            self.end_year = self.start_year + self.y_axis_data_size
+            # an array to store all of the event lines
+            self.event_lines = []
+            
+            self.fig = None
+            self.the_ax = None
+
+            #-----------------------------------------------------------------------
+            # set up the plot fonts
+            #-----------------------------------------------------------------------
+            self.ticklabelfont = mfont.FontProperties(family='Arial', style='normal', variant='normal', size=9)
+            self.sectionlabelfont = mfont.FontProperties(family='Arial', style='normal', variant='normal', size=9)
+            self.framelabelfont = mfont.FontProperties(family='Arial', style='normal', variant='normal', size=12)
+            self.legendtitlefont = mfont.FontProperties(family='Arial', style='normal', variant='normal', size=10)
+            self.legendticklabelfont = mfont.FontProperties(family='Arial', style='normal', variant='normal', size=9)
+            self.titlefont = mfont.FontProperties(family='Arial', style='normal', variant='normal', size=14)
+
+            #-----------------------------------------------------------------------
+            # set up plot dimensions (all values in pixels)
+            #-----------------------------------------------------------------------
+            # the event line width and pixels per "y" are based on the y_axis_data_size
+            self.elw = 1.0
+            self.ppy = 1.0
+            print self.y_axis_data_size
+            if math.ceil(self.y_axis_data_size) < 512 and math.ceil(self.y_axis_data_size) >= 256:
+                if event_time:
+                    self.elw = 2.0
+                else:
+                    self.ppy = 2.0
+            elif math.ceil(self.y_axis_data_size) < 256:
+                if event_time:
+                    self.elw = 4.0
+                else:
+                    self.ppy = 4.0
+            
+            # the event line width and pixels per "y" are based on the y_axis_data_size
+            self.ppx = 1.0
+            if math.ceil(self.x_axis_data_size) < 640 and math.ceil(self.x_axis_data_size) >= 320:
+                self.ppx = 2.0
+            elif math.ceil(self.x_axis_data_size) < 320:
+                self.ppx = 4.0
+
+            # the margins
+            self.lm = 50.0
+            self.bm = 10.0
+            self.rm = 10.0
+            
+            # the colorbar dimensions
+            self.cbw = 200.0
+            self.cbh = 10.0
+            
+            # the padding between the section names and the top of the plot frame
+            self.snp = 40.0
+            
+            # the plot resolution
+            self.res = 72.0
+            
+            #-----------------------------------------------------------------------
+            # plot dimensions that are calculated based on the settings above
+            #-----------------------------------------------------------------------
+            # if we are using event time the pixels per "y" is just the event line
+            # width
+            if event_time:
+                self.ppy = self.elw
+
+            # the height of the plot area depends on the pixels per "y" value
+            self.ph = self.ppy * math.ceil(self.y_axis_data_size)
+
+            # the height of the plot area depends on the pixels per "y" value
+            self.pw = self.ppx * math.ceil(self.x_axis_data_size)
+
+            # the top margin is based on the size of the section labels and their
+            # placement
+            self.tm = self.snp + self.sectionlabelfont.get_size() * 0.75 * self.max_label_len + self.cbh + 20
+
+            # the total image height
+            self.imh = self.ph + self.tm + self.bm
+            # the total image width
+            self.imw = self.pw + self.lm + self.rm
+            
+            #-----------------------------------------------------------------------
+            # set up the plot styles
+            #-----------------------------------------------------------------------
+            # the color map for the plot
+            self.cmap = mplt.get_cmap('autumn_r',lut=1000)
+            # the color of the vertical section demarcation lines
+            self.sdlc = '0.5'
+            # the alpha of the vertical section demarcation lines
+            self.sdla = 0.5
+            # the width of the vertical section demarcation lines
+            self.sdlw = 0.5
+            # the color of the section label lines
+            self.sllc = '0.5'
+            # the alpha of the section label lines
+            self.slla = 0.5
+            # the width of the section label lines
+            self.sllw = 0.5
+
+    def add_event(self, event_number, event_year, event_magnitude, event_line):
+        # initilize state variables
+        last_value = None
+        last_slot = -1
+        in_line = False
+        # the color of the event line based on the magnitude
+        (r,g,b,a) = self.cmap(self.mag_slope * (event_magnitude - self.min_mag))
+        # The slots are the indicies of the non-zero line elements from the
+        # event line array. These correspond to x data locations where there is
+        # a line.
+        slots = np.nonzero(event_line)[0]
+        # Go through the slots drawing lines where appropriate.
+        for k, slot in enumerate(slots):
+            value = event_line[slot]
+            if (slot - 1) != last_slot and k != 0:
+                # we have jumped a gap
+                # draw the last line
+                self.event_lines.append({
+                    'y':event_year,
+                    'xmin':float(line_start)/float(self.x_axis_data_size),
+                    'xmax':float(line_end + 1)/float(self.x_axis_data_size),
+                    'linewidth':self.elw,
+                    'color':(r,g,b)
+                })
+                #self.the_ax.axhline(
+                #    y=event_year,
+                #    xmin=float(line_start)/float(self.x_axis_data_size),
+                #    xmax=float(line_end + 1)/float(self.x_axis_data_size),
+                #    #alpha=float(last_value)/float(self.max_depth),
+                #    linewidth=self.elw,
+                #    color=(r,g,b)
+                #)
+                in_line = False
+                # start a new line
+                in_line = True
+                line_start = slot
+                line_end = slot
+            else:
+                # we are in a contiguous group
+                if last_value != event_line[slot]:
+                    if in_line:
+                        # draw the last line
+                        self.event_lines.append({
+                            'y':event_year,
+                            'xmin':float(line_start)/float(self.x_axis_data_size),
+                            'xmax':float(line_end + 1)/float(self.x_axis_data_size),
+                            #'linewidth':self.elw,
+                            'color':(r,g,b)
+                        })
+                        #self.the_ax.axhline(
+                        #    y=event_year,
+                        #    xmin=float(line_start)/float(self.x_axis_data_size),
+                        #    xmax=float(line_end + 1)/float(self.x_axis_data_size),
+                        #    #alpha=float(last_value)/float(self.max_depth),
+                        #    linewidth=self.elw,
+                        #    color=(r,g,b)
+                        #)
+                        in_line = False
+                    # start line
+                    in_line = True
+                    line_start = slot
+                    line_end = slot
+                else:
+                    # add to current line
+                    line_end = slot
+            
+            if k == len(slots) - 1:
+                # draw the last line
+                self.event_lines.append({
+                    'y':event_year,
+                    'xmin':float(line_start)/float(self.x_axis_data_size),
+                    'xmax':float(line_end + 1)/float(self.x_axis_data_size),
+                    #'linewidth':self.elw,
+                    'color':(r,g,b)
+                })
+                #self.the_ax.axhline(
+                #    y=event_year,
+                #    xmin=float(line_start)/float(self.x_axis_data_size),
+                #    xmax=float(line_end + 1)/float(self.x_axis_data_size),
+                #    #alpha=float(value)/float(self.max_depth),
+                #    linewidth=self.elw,
+                #    color=(r,g,b)
+                #)
+                in_line = False
+            last_value = value
+            last_slot = slot
+    
+    def add_section_labels(self, section_offsets, section_info):
+        # if the plot hasent been started start it
+        if self.fig is None:
+            self.start_plot()
+        # an array to store all of the label lines
+        label_lines = []
+        # The sorted section ids. Sections are printed in ascending order (by
+        # section id) from left to right.
+        section_ids = sorted(section_offsets.keys())
+        # Go through each section plotting the demarcation line, the section
+        # label, and the section label line.
+        for snum, sid in enumerate(section_ids):
+            # Plot the demarcation line (except at the zero offset)
+            if section_offsets[sid] != 0:
+                self.the_ax.axvline(
+                    x=section_offsets[sid],
+                    linewidth=self.sdlw,
+                    color=self.sdlc,
+                    alpha=self.sdla
+                )
+            # Set the text location. This will evenly distribute the text across
+            # the length of the x-axis.
+            x_text_loc = (float(snum)+0.5)/float(len(section_ids))
+            # Find the horizontal center of each section region
+            if snum == len(section_ids) - 1:
+                x_fault_loc = (float(section_offsets[sid] + self.x_axis_data_size)/2.0)/float(self.x_axis_data_size)
+            else:
+                x_fault_loc = (float(section_offsets[sid] + section_offsets[section_ids[snum + 1]])/2.0)/float(self.x_axis_data_size)
+            # Plot the section label
+            self.the_ax.text(
+                x_text_loc, (self.ph + self.snp)/self.ph,
+                '{} {}'.format(sid,section_info[sid]['name']),
+                horizontalalignment='center',
+                verticalalignment='bottom',
+                rotation=90,
+                fontproperties=self.sectionlabelfont,
+                transform=self.the_ax.transAxes
+            )
+            # Create the section line
+            line_xs = [x_text_loc, x_text_loc, x_fault_loc, x_fault_loc]
+            line_ys = [
+                (self.ph + self.snp - 5)/self.ph,
+                (self.ph + self.snp * ( 3.0/4.0 ))/self.ph,
+                (self.ph + self.snp * ( 1.0/4.0 ))/self.ph,
+                1
+            ]
+            label_lines.append(mlines.Line2D(
+                line_xs, line_ys,transform=self.the_ax.transAxes, solid_capstyle='round',
+                    alpha=self.slla,
+                    linewidth=self.sllw,
+                    color=self.sllc
+            ))
+        # Add the section label lines to the plot.
+        self.the_ax.lines.extend(label_lines)
+
+    def start_plot(self):
+        #-----------------------------------------------------------------------
+        # start the plot
+        #-----------------------------------------------------------------------
+        # calculate the final dimensions and create the figure and axis
+        self.imwi = self.imw/self.res
+        self.imhi = self.imh/self.res
+        self.fig = mplt.figure(figsize=(self.imwi, self.imhi), dpi=self.res)
+        self.the_ax = self.fig.add_axes((self.lm/self.imw, self.bm/self.imh, self.pw/self.imw, self.ph/self.imh))
+
+    def add_title(self, title):
+        # if the plot hasent been started start it
+        if self.fig is None:
+            self.start_plot()
+        self.the_ax.set_title(
+            title,
+            position=((10-self.lm)/self.pw,(self.ph + self.tm - 27)/self.ph),
+            ha='left',
+            fontproperties=self.titlefont,
+            #transform=self.fig.transFigure
+        )
+    
+    def plot(self):
+        # if the plot hasent been started start it
+        if self.fig is None:
+            self.start_plot()
+        
+        #-----------------------------------------------------------------------
+        # plot the event lines
+        #-----------------------------------------------------------------------
+        for el in self.event_lines:
+            self.the_ax.axhline(
+                y=el['y'],
+                xmin=el['xmin'],
+                xmax=el['xmax'],
+                #alpha=el['y'],
+                linewidth=self.elw,
+                color=el['color']
+            )
+        
+        self.the_ax.set_xlim((0, self.x_axis_data_size))
+        self.the_ax.set_ylim((self.start_year, self.end_year))
+        #self.the_ax.autoscale(enable=True, axis='both', tight=True)
+        
+        cb_ax    = self.fig.add_axes([(self.lm + self.pw - self.cbw)/self.imw, (self.imh - self.cbh - 10)/self.imh, self.cbw/self.imw, self.cbh/self.imh])
+        norm = mcolor.Normalize(vmin=self.min_mag, vmax=self.max_mag)
+        cb = mcolorbar.ColorbarBase(cb_ax, cmap=self.cmap,
+                   norm=norm,
+                   orientation='horizontal')
+        ticks = map(float, [self.min_mag,(self.min_mag+ self.max_mag)/2.0, self.max_mag])
+        cb.set_ticks([ticks[0], ticks[1], ticks[2]])
+        cb.set_ticklabels(['%.2f'%ticks[0],'%.2f'%ticks[1], '%.2f'%ticks[2]])
+
+        for label in cb_ax.xaxis.get_ticklabels():
+            label.set_fontproperties(self.legendticklabelfont)
+            
+        for line in cb_ax.xaxis.get_ticklines():
+            line.set_alpha(0)
+            
+        cb.ax.set_xlabel('Magnitude',position=(1,0), ha='right', fontproperties=self.legendtitlefont)
+        
+        for label in self.the_ax.yaxis.get_ticklabels():
+            label.set_fontproperties(self.ticklabelfont)
+        for label in self.the_ax.xaxis.get_ticklabels():
+            label.set_alpha(0)
+        for line in self.the_ax.xaxis.get_ticklines():
+            line.set_alpha(0)
+        
+        self.the_ax.set_ylabel('Year',fontproperties=self.framelabelfont)
+        
+        plot_format = self.output_file.split('.')[-1]
+        if plot_format != 'png' and plot_format != 'pdf':
+            raise vcexceptions.PlotFormatNotSupported(plot_format)
+        else:
+            self.fig.savefig(self.output_file, format=plot_format, dpi=self.res)
+
+#-------------------------------------------------------------------------------
+# A class for plotting spacetime events in parallel.
+#-------------------------------------------------------------------------------
+class SpaceTimePlotter(multiprocessing.Process):
+    def __init__(self, space_time_plot_params, work_queue, result_queue):
+ 
+        # job management stuff
+        self.work_queue = work_queue
+        self.result_queue = result_queue
+        self.kill_received = False
+        
+        #the path to the sim file
+        self.stp_params = space_time_plot_params
+        
+        super(SpaceTimePlotter, self).__init__()
+    
+    def run(self):
+    
+        stp = VCSpaceTimePlot(
+            self.stp_params['output_file'],
+            self.stp_params['x_axis_data_size'],
+            self.stp_params['y_axis_data_size'],
+            self.stp_params['max_depth'],
+            self.stp_params['min_mag'],
+            self.stp_params['max_mag'],
+            self.stp_params['start_year'],
+            self.stp_params['max_label_len'],
+            lite_init=True
+        )
+        
+        geometry = self.stp_params['geometry']
+        x_data_size = self.stp_params['x_axis_data_size']
+        min_depth = self.stp_params['max_depth']
+        section_offsets = self.stp_params['section_offsets']
+        
+        while not self.kill_received:
+            # get a task
+            try:
+                event_data = self.work_queue.get_nowait()
+            except Queue.Empty:
+                break
+        
+            # do the processing
+            print 'processing events {} - {}'.format(event_data['event_number'][0],event_data['event_number'][-1])
+            for i, enum in enumerate(event_data['event_number']):
+                event_line = np.zeros(x_data_size)
+                for bid in event_data['event_elements'][i]:
+                    sid = geometry[bid]['section_id']
+                    try:
+                        b_index = section_offsets[sid] + geometry[bid]['das_id']
+                        if event_line[b_index] < min_depth:
+                            event_line[b_index] += 1
+                    except KeyError:
+                        pass
+                stp.add_event(
+                    enum,
+                    event_data['event_year'][i],
+                    event_data['event_magnitude'][i],
+                    event_line
+                )
+            self.result_queue.put(stp)
+        
+        #self.sim_file.close()
+
+#-------------------------------------------------------------------------------
 # A class for processing event data in parallel. This is only used if a
 # simulation is being analyzed for the first time. The quantities calculated
 # here are saved in the simulation file.
@@ -282,6 +824,13 @@ class VCSimData(object):
     def __exit__(self, type, value, traceback):
         if self.file is not None:
             self.file.close()
+    
+    @property
+    def filename(self):
+        if self.file_path is not None:
+            return self.file_path.split('/')[-1]
+        else:
+            return None
 
     def open_file(self, file_path):
         if self.file_path is None:
