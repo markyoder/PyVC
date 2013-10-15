@@ -7,6 +7,114 @@ import matplotlib.font_manager as mfont
 import numpy as np
 import math
 import multiprocessing
+import cPickle
+import networkx as nx
+
+def plot_graph(graph_file, output_file, degree_cut=None, label_degree_cut=0.25, self_loops=True):
+    G = cPickle.load(open(graph_file, 'rb'))
+    
+    #print(nx.clustering(nx.Graph(G), weight='weight'))
+    
+    # the color map for the plot
+    cmap = mplt.get_cmap('GnBu_r')
+    
+    if degree_cut is not None:
+        print 'Original Graph'
+        print nx.info(G)
+        degrees = G.degree(weight='weight')
+        max_degree = float(max(degrees.values()))
+        min_degree = float(min(degrees.values()))
+        degree_cut_num = min_degree + (max_degree-min_degree)*degree_cut
+        print 'max degree: {}'.format(max_degree)
+        print 'min degree: {}'.format(min_degree)
+        print 'degree cut: {}'.format(degree_cut_num)
+        print
+        print 'Cut Graph'
+        sub_nodes = [n for n, d in G.degree(weight='weight').iteritems() if d > degree_cut_num]
+        Gsub = G.subgraph(sub_nodes)
+    else:
+        Gsub = G
+
+    if not self_loops:
+        print 'Removing Self Loops'
+        self_loop_edges = Gsub.selfloop_edges()
+        Gsub.remove_edges_from(self_loop_edges)
+    
+    print nx.info(Gsub)
+    
+    degrees = Gsub.degree(weight='weight')
+    max_degree = float(max(degrees.values()))
+    min_degree = float(min(degrees.values()))
+    print 'max degree: {}'.format(max_degree)
+    print 'min degree: {}'.format(min_degree)
+    node_min = 0.01
+    node_max = 0.2
+    node_line_min = 0.1
+    node_line_max = 2.0
+    min_label_degree = min_degree + (max_degree-min_degree)*label_degree_cut
+    min_font_size = 0.5
+    max_font_size = 6.0
+
+    widths = {}
+    heights = {}
+    labels = {}
+    styles = {}
+    colors = {}
+    node_line_widths = {}
+    font_sizes = {}
+    #print max_degree, min_degree
+    for n in nx.nodes_iter(Gsub):
+        degree = float(Gsub.degree(n, weight='weight'))
+        r,g,b,a = cmap(vcutils.linear_interp(degree, min_degree, max_degree, 0.0, 1.0))
+        dim = vcutils.linear_interp(degree, min_degree, max_degree, node_min, node_max)
+        widths[n] = dim
+        heights[n] = dim
+        if degree > min_label_degree:
+            labels[n] = n
+            font_sizes[n] = vcutils.linear_interp(degree, min_degree, max_degree, min_font_size, max_font_size)
+        else:
+            labels[n] = ''
+        styles[n] = 'filled'
+        colors[n] = '#{r:02x}{g:02x}{b:02x}'.format(r=int(r*255.0), g=int(g*255.0), b=int(b*255.0))
+        node_line_widths[n] = vcutils.linear_interp(degree, min_degree, max_degree, node_line_min, node_line_max)
+
+    nx.set_node_attributes(Gsub,'width',widths)
+    nx.set_node_attributes(Gsub,'height',heights)
+    nx.set_node_attributes(Gsub,'label',labels)
+    nx.set_node_attributes(Gsub,'style',styles)
+    nx.set_node_attributes(Gsub,'fillcolor',colors)
+    nx.set_node_attributes(Gsub,'penwidth',node_line_widths)
+    nx.set_node_attributes(Gsub,'fontsize',font_sizes)
+    #print G.edges(data=True)
+    
+    weights = [ float(edata['weight']) for u,v,edata in Gsub.edges(data=True) ]
+    
+    max_weight = float(max(weights))
+    min_weight = float(min(weights))
+    line_min = 0.1
+    line_max = 5.0
+    
+    edge_widths = {}
+    arrow_sizes = {}
+    edge_colors = {}
+    for e in nx.edges_iter(Gsub):
+        width = vcutils.linear_interp(float(Gsub[e[0]][e[1]]['weight']), min_weight, max_weight, line_min, line_max)
+        alpha = vcutils.linear_interp(float(Gsub[e[0]][e[1]]['weight']), min_weight, max_weight, 10.0, 255.0)
+        edge_widths[e] = width
+        arrow_sizes[e] = 0.1
+        edge_colors[e] = '#000000{:x}'.format(int(alpha))
+    
+    nx.set_edge_attributes(Gsub, 'penwidth', edge_widths)
+    nx.set_edge_attributes(Gsub, 'arrowsize', arrow_sizes)
+    nx.set_edge_attributes(Gsub, 'color', edge_colors)
+    #cmap = mplt.get_cmap('gray')
+    
+    #norm = mcolor.Normalize(vmin=min(edge_weights), vmax=max(edge_weights))
+    
+    A=nx.to_agraph(Gsub)        # convert to a graphviz graph
+    #A.layout()            # neato layout
+    A.draw(output_file, prog='sfdp', args='-Gsize="40!" -Goverlap=prism -Grepulsiveforce=1.0 -GsmoothType="graph_dist" -Goutputorder="edgesfirst" -Nfixedsize="true" -Nfontname="Helvetica"')
+
 
 #-------------------------------------------------------------------------------
 # space-time plot
@@ -28,22 +136,24 @@ def space_time_plot(sim_file, output_file, event_range=None, section_filter=None
 
         # get the data
         event_data = events.get_event_data(['event_number','event_year','event_magnitude','event_elements', 'event_range_duration'], event_range=event_range, magnitude_filter=magnitude_filter, section_filter=section_filter)
-        
         section_info = geometry.get_section_info(section_filter=section_filter)
-        
         
         # store a sorted list of section ids
         section_ids = sorted(section_info.keys())
         
+        # the section offsets determine the starting x position of each section
         section_offsets = {}
         for i, sid in enumerate(section_ids):
             section_offsets[sid] = sum([section_info[k]['blocks_along_strike'] for k in sorted(section_info.keys())[0:i]])
         
+        # calculate various properties of the data set that we will need to
+        # set up the plot
         min_depth = min([section_info[k]['blocks_along_dip'] for k in section_info.keys()])
         x_data_size = sum([section_info[k]['blocks_along_strike'] for k in section_info.keys()])
         max_label_len = max([len(section_info[k]['name']) for k in section_info.keys()])
         start_year = event_data['event_year'][0]
         
+        # Storing all of the plot parameters here for clarity
         stp_params = {
             'output_file':output_file,
             'x_axis_data_size':x_data_size,
@@ -56,7 +166,8 @@ def space_time_plot(sim_file, output_file, event_range=None, section_filter=None
             'geometry':geometry,
             'section_offsets':section_offsets
         }
-            
+        
+        # instantiate the spacetimeplot class
         stp = vcutils.VCSpaceTimePlot(
             stp_params['output_file'],
             stp_params['x_axis_data_size'],
@@ -73,6 +184,7 @@ def space_time_plot(sim_file, output_file, event_range=None, section_filter=None
         # The multiprocessing stuff below is not functional. The variable "mp"
         # above should always be set to False.
         #-----------------------------------------------------------------------
+        # TODO: Figure out a way to plot in parallel.
         if mp:
             num_processes = multiprocessing.cpu_count()
         
@@ -103,6 +215,12 @@ def space_time_plot(sim_file, output_file, event_range=None, section_filter=None
             for i in range(num_processes):
                 stp.event_lines += result_queue.get().event_lines
         else:
+            # For each event in the found event set, look at the involved
+            # elements, and add them to the event line array. Since the event
+            # line shows only elements on the strike, elements at depths are
+            # projected up to the strike: for every element along the dip the
+            # strike value is incremented up to the smallest value of depth in
+            # the model.
             for i, enum in enumerate(event_data['event_number']):
                 event_line = np.zeros(x_data_size)
                 for bid in event_data['event_elements'][i]:
@@ -119,11 +237,14 @@ def space_time_plot(sim_file, output_file, event_range=None, section_filter=None
                     event_data['event_magnitude'][i],
                     event_line
                 )
-        
+
+        # Add section labels
         stp.add_section_labels(section_offsets, section_info)
-        
+
+        # Add the title
         stp.add_title('Events from {}'.format(sim_data.filename))
-        
+
+        # Plot the thing
         stp.plot()
     
 #-------------------------------------------------------------------------------

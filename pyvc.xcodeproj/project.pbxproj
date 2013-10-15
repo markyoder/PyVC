@@ -7,6 +7,9 @@
 	objects = {
 
 /* Begin PBXFileReference section */
+		B812F043180C607200BC7E6C /* vcanalysis.py */ = {isa = PBXFileReference; lastKnownFileType = text.script.python; path = vcanalysis.py; sourceTree = "<group>"; };
+		B812F044180DB44400BC7E6C /* ids.py */ = {isa = PBXFileReference; lastKnownFileType = text.script.python; path = ids.py; sourceTree = "<group>"; };
+		B812F045180DB48000BC7E6C /* .gitignore */ = {isa = PBXFileReference; lastKnownFileType = text; path = .gitignore; sourceTree = "<group>"; };
 		B814514C17DF78100022664B /* LICENSE */ = {isa = PBXFileReference; lastKnownFileType = text; path = LICENSE; sourceTree = "<group>"; };
 		B814514D17DF78100022664B /* README.md */ = {isa = PBXFileReference; lastKnownFileType = text; path = README.md; sourceTree = "<group>"; };
 		B82A846E17D8FDE1000B1EF4 /* sandbox.py */ = {isa = PBXFileReference; lastKnownFileType = text.script.python; path = sandbox.py; sourceTree = "<group>"; };
@@ -29,6 +32,7 @@
 		B814514A17DF77CB0022664B /* local */ = {
 			isa = PBXGroup;
 			children = (
+				B812F044180DB44400BC7E6C /* ids.py */,
 				B830942017D7F36B003F6D3A /* mptest.py */,
 				B82A846E17D8FDE1000B1EF4 /* sandbox.py */,
 				B8D0978B178B43390006310A /* siso_test.py */,
@@ -42,6 +46,7 @@
 		B814514B17DF77FA0022664B /* other */ = {
 			isa = PBXGroup;
 			children = (
+				B812F045180DB48000BC7E6C /* .gitignore */,
 				B814514C17DF78100022664B /* LICENSE */,
 				B814514D17DF78100022664B /* README.md */,
 			);
@@ -68,6 +73,7 @@
 				B8EFC34F17CFD273006B4107 /* vcexceptions.py */,
 				B8EFC35017D10DDC006B4107 /* vcplots.py */,
 				B8EFC35117D12372006B4107 /* vcutils.py */,
+				B812F043180C607200BC7E6C /* vcanalysis.py */,
 			);
 			path = pyvc;
 			sourceTree = "<group>";

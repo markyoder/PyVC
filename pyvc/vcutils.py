@@ -17,6 +17,12 @@ import calendar
 from geographiclib.geodesic import Geodesic
 
 #-------------------------------------------------------------------------------
+# Given a set of maxes and mins return a linear value betweem them.
+#-------------------------------------------------------------------------------
+def linear_interp(x, x_min, x_max, y_min, y_max):
+    return ((y_max - y_min)/(x_max - x_min) * (x - x_min)) + y_min
+
+#-------------------------------------------------------------------------------
 # A class to perform unit conversions.
 #-------------------------------------------------------------------------------
 class Converter:
@@ -324,129 +330,128 @@ class VCSpaceTimePlot(object):
     # y_axis_data_size is the number of years in the plot, or if event_time is
     # true it is the number of events.
     #---------------------------------------------------------------------------
-    def __init__(self, output_file, x_axis_data_size, y_axis_data_size, max_depth, min_mag, max_mag, start_year, max_label_len, event_time=False, lite_init=False):
-        if lite_init:
-            self.cmap = mplt.get_cmap('autumn_r',lut=1000)
-            self.x_axis_data_size = x_axis_data_size
-            self.max_mag = max_mag
-            self.min_mag = min_mag
-            self.mag_slope = 1.0/(self.max_mag - self.min_mag)
-            self.event_lines = []
-        else:
-            # store the output file
-            self.output_file = output_file
-            # store the max depth. this is in number of blocks
-            self.max_depth = max_depth
-            # store the x and y axis data size
-            self.x_axis_data_size = x_axis_data_size
-            self.y_axis_data_size = y_axis_data_size
-            # store the min and max magnitudes
-            self.max_mag = max_mag
-            self.min_mag = min_mag
-            # calculate the slope of the magnitude color ramp
-            self.mag_slope = 1.0/(self.max_mag - self.min_mag)
-            # store the max label length used to calculate the top margin
-            self.max_label_len = max_label_len
-            # set the start and end year
-            self.start_year = start_year
-            self.end_year = self.start_year + self.y_axis_data_size
-            # an array to store all of the event lines
-            self.event_lines = []
-            
-            self.fig = None
-            self.the_ax = None
+    def __init__(self, output_file, x_axis_data_size, y_axis_data_size, max_depth, min_mag, max_mag, start_year, max_label_len, event_time=False):
+        # store the output file
+        self.output_file = output_file
+        # store the max depth. this is in number of blocks
+        self.max_depth = max_depth
+        # store the x and y axis data size
+        self.x_axis_data_size = x_axis_data_size
+        self.y_axis_data_size = y_axis_data_size
+        # store the min and max magnitudes
+        self.max_mag = max_mag
+        self.min_mag = min_mag
+        # calculate the slope of the magnitude color ramp
+        self.mag_slope = 1.0/(self.max_mag - self.min_mag)
+        # store the max label length used to calculate the top margin
+        self.max_label_len = max_label_len
+        # set the start and end year
+        self.start_year = start_year
+        self.end_year = self.start_year + self.y_axis_data_size
 
-            #-----------------------------------------------------------------------
-            # set up the plot fonts
-            #-----------------------------------------------------------------------
-            self.ticklabelfont = mfont.FontProperties(family='Arial', style='normal', variant='normal', size=9)
-            self.sectionlabelfont = mfont.FontProperties(family='Arial', style='normal', variant='normal', size=9)
-            self.framelabelfont = mfont.FontProperties(family='Arial', style='normal', variant='normal', size=12)
-            self.legendtitlefont = mfont.FontProperties(family='Arial', style='normal', variant='normal', size=10)
-            self.legendticklabelfont = mfont.FontProperties(family='Arial', style='normal', variant='normal', size=9)
-            self.titlefont = mfont.FontProperties(family='Arial', style='normal', variant='normal', size=14)
+        #-----------------------------------------------------------------------
+        # set up the plot fonts
+        #-----------------------------------------------------------------------
+        self.ticklabelfont = mfont.FontProperties(family='Arial', style='normal', variant='normal', size=9)
+        self.sectionlabelfont = mfont.FontProperties(family='Arial', style='normal', variant='normal', size=9)
+        self.framelabelfont = mfont.FontProperties(family='Arial', style='normal', variant='normal', size=12)
+        self.legendtitlefont = mfont.FontProperties(family='Arial', style='normal', variant='normal', size=10)
+        self.legendticklabelfont = mfont.FontProperties(family='Arial', style='normal', variant='normal', size=9)
+        self.titlefont = mfont.FontProperties(family='Arial', style='normal', variant='normal', size=14)
 
-            #-----------------------------------------------------------------------
-            # set up plot dimensions (all values in pixels)
-            #-----------------------------------------------------------------------
-            # the event line width and pixels per "y" are based on the y_axis_data_size
-            self.elw = 1.0
-            self.ppy = 1.0
-            print self.y_axis_data_size
-            if math.ceil(self.y_axis_data_size) < 512 and math.ceil(self.y_axis_data_size) >= 256:
-                if event_time:
-                    self.elw = 2.0
-                else:
-                    self.ppy = 2.0
-            elif math.ceil(self.y_axis_data_size) < 256:
-                if event_time:
-                    self.elw = 4.0
-                else:
-                    self.ppy = 4.0
-            
-            # the event line width and pixels per "y" are based on the y_axis_data_size
-            self.ppx = 1.0
-            if math.ceil(self.x_axis_data_size) < 640 and math.ceil(self.x_axis_data_size) >= 320:
-                self.ppx = 2.0
-            elif math.ceil(self.x_axis_data_size) < 320:
-                self.ppx = 4.0
-
-            # the margins
-            self.lm = 50.0
-            self.bm = 10.0
-            self.rm = 10.0
-            
-            # the colorbar dimensions
-            self.cbw = 200.0
-            self.cbh = 10.0
-            
-            # the padding between the section names and the top of the plot frame
-            self.snp = 40.0
-            
-            # the plot resolution
-            self.res = 72.0
-            
-            #-----------------------------------------------------------------------
-            # plot dimensions that are calculated based on the settings above
-            #-----------------------------------------------------------------------
-            # if we are using event time the pixels per "y" is just the event line
-            # width
+        #-----------------------------------------------------------------------
+        # set up plot dimensions (all values in pixels)
+        #-----------------------------------------------------------------------
+        # the event line width and pixels per "y" are based on the y_axis_data_size
+        self.elw = 1.0
+        self.ppy = 1.0
+        if math.ceil(self.y_axis_data_size) < 512 and math.ceil(self.y_axis_data_size) >= 256:
             if event_time:
-                self.ppy = self.elw
+                self.elw = 2.0
+            else:
+                self.ppy = 2.0
+        elif math.ceil(self.y_axis_data_size) < 256:
+            if event_time:
+                self.elw = 4.0
+            else:
+                self.ppy = 4.0
+        
+        # the event line width and pixels per "y" are based on the y_axis_data_size
+        self.ppx = 1.0
+        if math.ceil(self.x_axis_data_size) < 640 and math.ceil(self.x_axis_data_size) >= 320:
+            self.ppx = 2.0
+        elif math.ceil(self.x_axis_data_size) < 320:
+            self.ppx = 4.0
 
-            # the height of the plot area depends on the pixels per "y" value
-            self.ph = self.ppy * math.ceil(self.y_axis_data_size)
+        # the margins
+        self.lm = 50.0
+        self.bm = 10.0
+        self.rm = 10.0
+        
+        # the colorbar dimensions
+        self.cbw = 200.0
+        self.cbh = 10.0
+        
+        # the padding between the section names and the top of the plot frame
+        self.snp = 40.0
+        
+        # the plot resolution
+        self.res = 72.0
+        
+        #-----------------------------------------------------------------------
+        # plot dimensions that are calculated based on the settings above
+        #-----------------------------------------------------------------------
+        # if we are using event time the pixels per "y" is just the event line
+        # width
+        if event_time:
+            self.ppy = self.elw
 
-            # the height of the plot area depends on the pixels per "y" value
-            self.pw = self.ppx * math.ceil(self.x_axis_data_size)
+        # the height of the plot area depends on the pixels per "y" value
+        self.ph = self.ppy * math.ceil(self.y_axis_data_size)
 
-            # the top margin is based on the size of the section labels and their
-            # placement
-            self.tm = self.snp + self.sectionlabelfont.get_size() * 0.75 * self.max_label_len + self.cbh + 20
+        # the height of the plot area depends on the pixels per "y" value
+        self.pw = self.ppx * math.ceil(self.x_axis_data_size)
 
-            # the total image height
-            self.imh = self.ph + self.tm + self.bm
-            # the total image width
-            self.imw = self.pw + self.lm + self.rm
-            
-            #-----------------------------------------------------------------------
-            # set up the plot styles
-            #-----------------------------------------------------------------------
-            # the color map for the plot
-            self.cmap = mplt.get_cmap('autumn_r',lut=1000)
-            # the color of the vertical section demarcation lines
-            self.sdlc = '0.5'
-            # the alpha of the vertical section demarcation lines
-            self.sdla = 0.5
-            # the width of the vertical section demarcation lines
-            self.sdlw = 0.5
-            # the color of the section label lines
-            self.sllc = '0.5'
-            # the alpha of the section label lines
-            self.slla = 0.5
-            # the width of the section label lines
-            self.sllw = 0.5
+        # the top margin is based on the size of the section labels and their
+        # placement
+        self.tm = self.snp + self.sectionlabelfont.get_size() * 0.75 * self.max_label_len + self.cbh + 20
 
+        # the total image height
+        self.imh = self.ph + self.tm + self.bm
+        # the total image width
+        self.imw = self.pw + self.lm + self.rm
+        
+        #-----------------------------------------------------------------------
+        # set up the plot styles
+        #-----------------------------------------------------------------------
+        # the color map for the plot
+        self.cmap = mplt.get_cmap('autumn_r',lut=1000)
+        # the color of the vertical section demarcation lines
+        self.sdlc = '0.5'
+        # the alpha of the vertical section demarcation lines
+        self.sdla = 0.5
+        # the width of the vertical section demarcation lines
+        self.sdlw = 0.5
+        # the color of the section label lines
+        self.sllc = '0.5'
+        # the alpha of the section label lines
+        self.slla = 0.5
+        # the width of the section label lines
+        self.sllw = 0.5
+
+        #-----------------------------------------------------------------------
+        # start the plot
+        #-----------------------------------------------------------------------
+        # calculate the final dimensions and create the figure and axis
+        self.imwi = self.imw/self.res
+        self.imhi = self.imh/self.res
+        self.fig = mplt.figure(figsize=(self.imwi, self.imhi), dpi=self.res)
+        self.the_ax = self.fig.add_axes((self.lm/self.imw, self.bm/self.imh, self.pw/self.imw, self.ph/self.imh))
+    
+    #---------------------------------------------------------------------------
+    # Adds event to the plot by plotting them directly instead of storing them.
+    # This behavior may have to change to storing when running in parallel.
+    #---------------------------------------------------------------------------
     def add_event(self, event_number, event_year, event_magnitude, event_line):
         # initilize state variables
         last_value = None
@@ -464,21 +469,14 @@ class VCSpaceTimePlot(object):
             if (slot - 1) != last_slot and k != 0:
                 # we have jumped a gap
                 # draw the last line
-                self.event_lines.append({
-                    'y':event_year,
-                    'xmin':float(line_start)/float(self.x_axis_data_size),
-                    'xmax':float(line_end + 1)/float(self.x_axis_data_size),
-                    'linewidth':self.elw,
-                    'color':(r,g,b)
-                })
-                #self.the_ax.axhline(
-                #    y=event_year,
-                #    xmin=float(line_start)/float(self.x_axis_data_size),
-                #    xmax=float(line_end + 1)/float(self.x_axis_data_size),
-                #    #alpha=float(last_value)/float(self.max_depth),
-                #    linewidth=self.elw,
-                #    color=(r,g,b)
-                #)
+                self.the_ax.axhline(
+                    y=event_year,
+                    xmin=float(line_start)/float(self.x_axis_data_size),
+                    xmax=float(line_end + 1)/float(self.x_axis_data_size),
+                    #alpha=float(last_value)/float(self.max_depth),
+                    linewidth=self.elw,
+                    color=(r,g,b)
+                )
                 in_line = False
                 # start a new line
                 in_line = True
@@ -489,21 +487,14 @@ class VCSpaceTimePlot(object):
                 if last_value != event_line[slot]:
                     if in_line:
                         # draw the last line
-                        self.event_lines.append({
-                            'y':event_year,
-                            'xmin':float(line_start)/float(self.x_axis_data_size),
-                            'xmax':float(line_end + 1)/float(self.x_axis_data_size),
-                            #'linewidth':self.elw,
-                            'color':(r,g,b)
-                        })
-                        #self.the_ax.axhline(
-                        #    y=event_year,
-                        #    xmin=float(line_start)/float(self.x_axis_data_size),
-                        #    xmax=float(line_end + 1)/float(self.x_axis_data_size),
-                        #    #alpha=float(last_value)/float(self.max_depth),
-                        #    linewidth=self.elw,
-                        #    color=(r,g,b)
-                        #)
+                        self.the_ax.axhline(
+                            y=event_year,
+                            xmin=float(line_start)/float(self.x_axis_data_size),
+                            xmax=float(line_end + 1)/float(self.x_axis_data_size),
+                            #alpha=float(last_value)/float(self.max_depth),
+                            linewidth=self.elw,
+                            color=(r,g,b)
+                        )
                         in_line = False
                     # start line
                     in_line = True
@@ -515,34 +506,29 @@ class VCSpaceTimePlot(object):
             
             if k == len(slots) - 1:
                 # draw the last line
-                self.event_lines.append({
-                    'y':event_year,
-                    'xmin':float(line_start)/float(self.x_axis_data_size),
-                    'xmax':float(line_end + 1)/float(self.x_axis_data_size),
-                    #'linewidth':self.elw,
-                    'color':(r,g,b)
-                })
-                #self.the_ax.axhline(
-                #    y=event_year,
-                #    xmin=float(line_start)/float(self.x_axis_data_size),
-                #    xmax=float(line_end + 1)/float(self.x_axis_data_size),
-                #    #alpha=float(value)/float(self.max_depth),
-                #    linewidth=self.elw,
-                #    color=(r,g,b)
-                #)
+                self.the_ax.axhline(
+                    y=event_year,
+                    xmin=float(line_start)/float(self.x_axis_data_size),
+                    xmax=float(line_end + 1)/float(self.x_axis_data_size),
+                    #alpha=float(value)/float(self.max_depth),
+                    linewidth=self.elw,
+                    color=(r,g,b)
+                )
                 in_line = False
             last_value = value
             last_slot = slot
     
+    #---------------------------------------------------------------------------
+    # Add the section labels and the section demarcation lines.
+    #---------------------------------------------------------------------------
     def add_section_labels(self, section_offsets, section_info):
-        # if the plot hasent been started start it
-        if self.fig is None:
-            self.start_plot()
         # an array to store all of the label lines
         label_lines = []
+        
         # The sorted section ids. Sections are printed in ascending order (by
         # section id) from left to right.
         section_ids = sorted(section_offsets.keys())
+        
         # Go through each section plotting the demarcation line, the section
         # label, and the section label line.
         for snum, sid in enumerate(section_ids):
@@ -554,14 +540,17 @@ class VCSpaceTimePlot(object):
                     color=self.sdlc,
                     alpha=self.sdla
                 )
+            
             # Set the text location. This will evenly distribute the text across
             # the length of the x-axis.
             x_text_loc = (float(snum)+0.5)/float(len(section_ids))
+            
             # Find the horizontal center of each section region
             if snum == len(section_ids) - 1:
                 x_fault_loc = (float(section_offsets[sid] + self.x_axis_data_size)/2.0)/float(self.x_axis_data_size)
             else:
                 x_fault_loc = (float(section_offsets[sid] + section_offsets[section_ids[snum + 1]])/2.0)/float(self.x_axis_data_size)
+            
             # Plot the section label
             self.the_ax.text(
                 x_text_loc, (self.ph + self.snp)/self.ph,
@@ -572,6 +561,7 @@ class VCSpaceTimePlot(object):
                 fontproperties=self.sectionlabelfont,
                 transform=self.the_ax.transAxes
             )
+
             # Create the section line
             line_xs = [x_text_loc, x_text_loc, x_fault_loc, x_fault_loc]
             line_ys = [
@@ -586,53 +576,30 @@ class VCSpaceTimePlot(object):
                     linewidth=self.sllw,
                     color=self.sllc
             ))
+        
         # Add the section label lines to the plot.
         self.the_ax.lines.extend(label_lines)
-
-    def start_plot(self):
-        #-----------------------------------------------------------------------
-        # start the plot
-        #-----------------------------------------------------------------------
-        # calculate the final dimensions and create the figure and axis
-        self.imwi = self.imw/self.res
-        self.imhi = self.imh/self.res
-        self.fig = mplt.figure(figsize=(self.imwi, self.imhi), dpi=self.res)
-        self.the_ax = self.fig.add_axes((self.lm/self.imw, self.bm/self.imh, self.pw/self.imw, self.ph/self.imh))
-
+    
+    #---------------------------------------------------------------------------
+    # Add the title.
+    #---------------------------------------------------------------------------
     def add_title(self, title):
-        # if the plot hasent been started start it
-        if self.fig is None:
-            self.start_plot()
         self.the_ax.set_title(
             title,
             position=((10-self.lm)/self.pw,(self.ph + self.tm - 27)/self.ph),
             ha='left',
             fontproperties=self.titlefont,
-            #transform=self.fig.transFigure
         )
     
+    #---------------------------------------------------------------------------
+    # Finish off the plot and save it.
+    #---------------------------------------------------------------------------
     def plot(self):
-        # if the plot hasent been started start it
-        if self.fig is None:
-            self.start_plot()
-        
-        #-----------------------------------------------------------------------
-        # plot the event lines
-        #-----------------------------------------------------------------------
-        for el in self.event_lines:
-            self.the_ax.axhline(
-                y=el['y'],
-                xmin=el['xmin'],
-                xmax=el['xmax'],
-                #alpha=el['y'],
-                linewidth=self.elw,
-                color=el['color']
-            )
-        
+        # Set the axis limits
         self.the_ax.set_xlim((0, self.x_axis_data_size))
         self.the_ax.set_ylim((self.start_year, self.end_year))
-        #self.the_ax.autoscale(enable=True, axis='both', tight=True)
         
+        # Create the colorbar
         cb_ax    = self.fig.add_axes([(self.lm + self.pw - self.cbw)/self.imw, (self.imh - self.cbh - 10)/self.imh, self.cbw/self.imw, self.cbh/self.imh])
         norm = mcolor.Normalize(vmin=self.min_mag, vmax=self.max_mag)
         cb = mcolorbar.ColorbarBase(cb_ax, cmap=self.cmap,
@@ -641,15 +608,17 @@ class VCSpaceTimePlot(object):
         ticks = map(float, [self.min_mag,(self.min_mag+ self.max_mag)/2.0, self.max_mag])
         cb.set_ticks([ticks[0], ticks[1], ticks[2]])
         cb.set_ticklabels(['%.2f'%ticks[0],'%.2f'%ticks[1], '%.2f'%ticks[2]])
-
+        
+        # Style and cleanup the colorbar ticks
         for label in cb_ax.xaxis.get_ticklabels():
             label.set_fontproperties(self.legendticklabelfont)
-            
         for line in cb_ax.xaxis.get_ticklines():
             line.set_alpha(0)
-            
+        
+        # Set the colorbar label
         cb.ax.set_xlabel('Magnitude',position=(1,0), ha='right', fontproperties=self.legendtitlefont)
         
+        # Style and cleanup the plot ticks
         for label in self.the_ax.yaxis.get_ticklabels():
             label.set_fontproperties(self.ticklabelfont)
         for label in self.the_ax.xaxis.get_ticklabels():
@@ -657,8 +626,10 @@ class VCSpaceTimePlot(object):
         for line in self.the_ax.xaxis.get_ticklines():
             line.set_alpha(0)
         
+        # Set the plot y-axis label
         self.the_ax.set_ylabel('Year',fontproperties=self.framelabelfont)
         
+        # Get the plot format and save the file
         plot_format = self.output_file.split('.')[-1]
         if plot_format != 'png' and plot_format != 'pdf':
             raise vcexceptions.PlotFormatNotSupported(plot_format)
@@ -666,8 +637,10 @@ class VCSpaceTimePlot(object):
             self.fig.savefig(self.output_file, format=plot_format, dpi=self.res)
 
 #-------------------------------------------------------------------------------
-# A class for plotting spacetime events in parallel.
+# A class for plotting spacetime events in parallel. This is currently under
+# development.
 #-------------------------------------------------------------------------------
+# TODO: Figure out a way to plot in parallel.
 class SpaceTimePlotter(multiprocessing.Process):
     def __init__(self, space_time_plot_params, work_queue, result_queue):
  

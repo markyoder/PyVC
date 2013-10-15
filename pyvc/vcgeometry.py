@@ -1,5 +1,6 @@
 #!/usr/bin/env python
 from . import VCSys
+from operator import itemgetter
 
 #-------------------------------------------------------------------------------
 # A class representing the geometry of a Virtual California simulation.
@@ -10,6 +11,10 @@ class VCGeometry(VCSys):
         
         # the table we need from the simulation data
         self.geometry_data = self.sim_data.file.root.block_info_table
+    
+    def sections_with_elements(self, elements):
+        ele_getter = itemgetter(*elements)
+        return set(ele_getter(self.geometry_data.read(field='section_id')))
 
     def get_section_info(self, section_filter=None, section_id=None):
         if section_filter is not None:

@@ -48,6 +48,8 @@ Converter.py
 MyVector.py
 Utils.py
 VC.py
+ids*
+ALLCAL2*
 
 #########################
 # .gitignore file for Xcode4 / OS X Source projects
