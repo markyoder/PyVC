@@ -8,7 +8,7 @@ import cPickle
 #-------------------------------------------------------------------------------
 # Prints out various information about a simulation.
 #-------------------------------------------------------------------------------
-def sim_info(sim_file):
+def sim_info(sim_file, sortby='event_magnitude', show=50, event_range=None, section_filter=None, magnitude_filter=None):
      with VCSimData() as sim_data:
         # open the simulation data file
         sim_data.open_file(sim_file)
@@ -18,10 +18,16 @@ def sim_info(sim_file):
         events = VCEvents(sim_data)
         geometry = VCGeometry(sim_data)
 
-        event_data = events.get_event_data(['event_number', 'event_year', 'event_magnitude', 'event_range_duration'])
-
-        for i in [i[0] for i in sorted(enumerate(event_data['event_magnitude']), key=itemgetter(1), reverse=True)][0:20]:
-            print event_data['event_number'][i], event_data['event_year'][i], event_data['event_magnitude'][i]
+        event_data = events.get_event_data(['event_number', 'event_year', 'event_magnitude', 'event_range_duration'], event_range=event_range, magnitude_filter=magnitude_filter, section_filter=section_filter)
+        
+        print '{0:<10}{1:<10}{2:<10}'.format('num','year','magnitude')
+        if sortby == 'event_elements':
+            sorted_data = [i[0] for i in sorted(enumerate(event_data[sortby]), lambda a,b: cmp(len(b[1]),len(a[1])), reverse=True)][0:show]
+        else:
+            sorted_data = [i[0] for i in sorted(enumerate(event_data[sortby]), key=itemgetter(1), reverse=True)][0:show]
+     
+        for i in sorted_data:
+            print '{ev_num:<10}{ev_year:<10.2f}{ev_mag:<10.2f}'.format(ev_num=event_data['event_number'][i], ev_year=event_data['event_year'][i], ev_mag=event_data['event_magnitude'][i])
 
 def graph_events(sim_file, output_file, event_range=None, section_filter=None, magnitude_filter=None):
     with VCSimData() as sim_data:
