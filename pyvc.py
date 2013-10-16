@@ -489,7 +489,7 @@ def main(argv=None):
         vc_sys.plotFaultMap()
 
     if event_fault_map is not None:
-        vc_sys.plotFaultMap(evid=event_fault_map)
+        vc_sys.plotFaultMap(evid=event_fault_map, event_file=vc_sys.data_file)
 
     #if slip_in_slip_out:
     #    if start_year is not None and start_event == 0:

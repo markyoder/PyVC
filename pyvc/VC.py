@@ -3947,7 +3947,7 @@ class VCSys(object):
     '''
     def plotFaultMap(self, event_file=None, evid=None):
         print '*** Plotting fault map ***'
-    
+        
         # <Font 'Arial' (arial.ttf) normal normal 400 normal>
         ticklabelfont = matplotlib.font_manager.FontProperties(family='Arial', style='normal', variant='normal', size=9)
     
