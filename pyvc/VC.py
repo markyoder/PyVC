@@ -1218,11 +1218,11 @@ class RuptureMapPlotter(object):
         bm = 10.0
         res = 72.0
         
-        self.ticklabelfont = matplotlib.font_manager.FontProperties(family='FreeSans', style='normal', variant='normal', size=9)
-        self.framelabelfont = matplotlib.font_manager.FontProperties(family='FreeSans', style='normal', variant='normal', size=10)
-        self.legendfont = matplotlib.font_manager.FontProperties(family='FreeSans', style='normal', variant='normal', size=9)
-        self.legendticklabelfont = matplotlib.font_manager.FontProperties(family='FreeSans', style='normal', variant='normal', size=9)
-        self.sectionlabelfont = matplotlib.font_manager.FontProperties(family='FreeSans', style='normal', variant='normal', size=9)
+        self.ticklabelfont = matplotlib.font_manager.FontProperties(family='Arial', style='normal', variant='normal', size=9)
+        self.framelabelfont = matplotlib.font_manager.FontProperties(family='Arial', style='normal', variant='normal', size=10)
+        self.legendfont = matplotlib.font_manager.FontProperties(family='Arial', style='normal', variant='normal', size=9)
+        self.legendticklabelfont = matplotlib.font_manager.FontProperties(family='Arial', style='normal', variant='normal', size=9)
+        self.sectionlabelfont = matplotlib.font_manager.FontProperties(family='Arial', style='normal', variant='normal', size=9)
         
         imwi = imw/res
         imhi = imh/res
@@ -1509,7 +1509,7 @@ class BasicPlotter(object):
         self.framelabelfont = matplotlib.font_manager.FontProperties(family='Arial', style='normal', variant='normal', size=10)
         self.legendfont = matplotlib.font_manager.FontProperties(family='Arial', style='normal', variant='normal', size=10)
         self.titlefont = matplotlib.font_manager.FontProperties(family='Arial', style='normal', variant='normal', size=12)
-        #arial8_light = matplotlib.font_manager.FontProperties(family='FreeSans', style='normal', variant='normal', size=8, weight='light')
+        #arial8_light = matplotlib.font_manager.FontProperties(family='Arial', style='normal', variant='normal', size=8, weight='light')
     
     def addEvent(self):
         self.event_count += 1
@@ -1557,9 +1557,9 @@ class BasicPlotter(object):
         
         con_line = '--'
         
-        arial12 = matplotlib.font_manager.FontProperties(family='FreeSans', style='normal', variant='normal', size=12)
-        arial10 = matplotlib.font_manager.FontProperties(family='FreeSans', style='normal', variant='normal', size=10)
-        arial8_light = matplotlib.font_manager.FontProperties(family='FreeSans', style='normal', variant='normal', size=8, weight='light')
+        arial12 = matplotlib.font_manager.FontProperties(family='Arial', style='normal', variant='normal', size=12)
+        arial10 = matplotlib.font_manager.FontProperties(family='Arial', style='normal', variant='normal', size=10)
+        arial8_light = matplotlib.font_manager.FontProperties(family='Arial', style='normal', variant='normal', size=8, weight='light')
         
     # do the plot
         imwi = imw/res
@@ -2794,8 +2794,8 @@ class VCSys(object):
         
         # values for the fringes map are denoted by a {value}_f
         self.displacementMapConfig = {
-            'font':               matplotlib.font_manager.FontProperties(family='FreeSans', style='normal', variant='normal', weight='normal'),
-            'font_bold':          matplotlib.font_manager.FontProperties(family='FreeSans', style='normal', variant='normal', weight='bold'),
+            'font':               matplotlib.font_manager.FontProperties(family='Arial', style='normal', variant='normal', weight='normal'),
+            'font_bold':          matplotlib.font_manager.FontProperties(family='Arial', style='normal', variant='normal', weight='bold'),
             'cmap':               plt.get_cmap('YlOrRd'),
             'cmap_f':             plt.get_cmap('jet'),
         #water
@@ -3949,7 +3949,7 @@ class VCSys(object):
         print '*** Plotting fault map ***'
     
         # <Font 'Arial' (arial.ttf) normal normal 400 normal>
-        ticklabelfont = matplotlib.font_manager.FontProperties(family='FreeSans', style='normal', variant='normal', size=9)
+        ticklabelfont = matplotlib.font_manager.FontProperties(family='Arial', style='normal', variant='normal', size=9)
     
     # set up plot
         pw = 501.0
@@ -4155,7 +4155,7 @@ class VCSys(object):
         #low_mag_color = '#92C8FC'
         #high_mag_color = 'k'
         
-        arial7 = matplotlib.font_manager.FontProperties(family='FreeSans', style='normal', variant='normal', size=9)
+        arial7 = matplotlib.font_manager.FontProperties(family='Arial', style='normal', variant='normal', size=9)
         #event_color_map = LinearSegmentedColormap.from_list('event_color_map', [low_mag_color,high_mag_color], N=256, gamma=1.0)
         
         event_color = '0.5'
@@ -4323,7 +4323,7 @@ class VCSys(object):
         bm = 20.0
         res = 72.0
         
-        arial10 = matplotlib.font_manager.FontProperties(family='FreeSans', style='normal', variant='normal', size=10)
+        arial10 = matplotlib.font_manager.FontProperties(family='Arial', style='normal', variant='normal', size=10)
         
         base_color = (0.5,0.5,0.5,0.5)
         base_width = 0.5
@@ -4440,8 +4440,8 @@ class VCSys(object):
         bm = 40.0
         res = 72.0
         
-        arial12 = matplotlib.font_manager.FontProperties(family='FreeSans', style='normal', variant='normal', size=12)
-        arial8_light = matplotlib.font_manager.FontProperties(family='FreeSans', style='normal', variant='normal', size=8, weight='light')
+        arial12 = matplotlib.font_manager.FontProperties(family='Arial', style='normal', variant='normal', size=12)
+        arial8_light = matplotlib.font_manager.FontProperties(family='Arial', style='normal', variant='normal', size=8, weight='light')
         
         not_involved_color = 'white'
         min_slip_color = 'yellow'
@@ -4622,10 +4622,10 @@ class VCSys(object):
         bm = 40.0
         res = 72.0
         
-        arial14 = matplotlib.font_manager.FontProperties(family='FreeSans', style='normal', variant='normal', size=14)
-        arial12 = matplotlib.font_manager.FontProperties(family='FreeSans', style='normal', variant='normal', size=12)
-        arial8_light = matplotlib.font_manager.FontProperties(family='FreeSans', style='normal', variant='normal', size=9, weight='light')
-        arial7_light = matplotlib.font_manager.FontProperties(family='FreeSans', style='normal', variant='normal', size=9, weight='light')
+        arial14 = matplotlib.font_manager.FontProperties(family='Arial', style='normal', variant='normal', size=14)
+        arial12 = matplotlib.font_manager.FontProperties(family='Arial', style='normal', variant='normal', size=12)
+        arial8_light = matplotlib.font_manager.FontProperties(family='Arial', style='normal', variant='normal', size=9, weight='light')
+        arial7_light = matplotlib.font_manager.FontProperties(family='Arial', style='normal', variant='normal', size=9, weight='light')
         
         not_involved_color = 'white'
         min_slip_color = 'yellow'
