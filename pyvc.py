@@ -630,7 +630,7 @@ def main(argv=None):
         vc_sys.exportEqsimGeometry('%s_Geometry.dat'%vc_sys.name, '%s_Friction.dat'%vc_sys.name)
     
     if plot_faults:
-        vc_sys.exportKMLGeometry('%s_Faults.kml'%vc_sys.name)
+        vc_sys.exportKMLGeometry()
     
 if __name__ == "__main__": 
     sys.exit(main())

@@ -6881,7 +6881,10 @@ class VCSys(object):
         self.geometry.exportEqsimGeometry(geometry_file, friction_file)
         print '*** Done ***'
     
-    def exportKMLGeometry(self, out_file, section_list = None):
+    def exportKMLGeometry(self, section_list=None):
+        
+        file_name_prepend = self.fileNamePrepend(type='dat')
+        out_file = '%sfaults.kml'%(file_name_prepend)
         print '*** Exporting KML geometry to file %s ***'%(out_file)
         min_lat, max_lat, min_lon, max_lon = self.geometry.minMaxLatLon()
         #print 'test'

@@ -35,11 +35,8 @@ nosetests.xml
 .pydevproject
 
 # Other
-*demo*
-sandbox*
-vcal_py_*.dat
-siso_test.py
-mptest.py
+local*
+ids_output*
 
 #########################
 # .gitignore file for Xcode4 / OS X Source projects

@@ -7,6 +7,7 @@
 	objects = {
 
 /* Begin PBXFileReference section */
+		B8122517180EF3F000939792 /* .gitignore */ = {isa = PBXFileReference; lastKnownFileType = text; path = .gitignore; sourceTree = "<group>"; };
 		B814514917DF736E0022664B /* README.md */ = {isa = PBXFileReference; lastKnownFileType = text; path = README.md; sourceTree = "<group>"; };
 		B8EFC34317CFC2CD006B4107 /* pyvc.pth */ = {isa = PBXFileReference; fileEncoding = 4; lastKnownFileType = text; path = pyvc.pth; sourceTree = "<group>"; };
 		B8EFC34417CFC2CD006B4107 /* pyvc.py */ = {isa = PBXFileReference; fileEncoding = 4; lastKnownFileType = text.script.python; path = pyvc.py; sourceTree = "<group>"; };
@@ -21,6 +22,7 @@
 		B814514817DF73630022664B /* other */ = {
 			isa = PBXGroup;
 			children = (
+				B8122517180EF3F000939792 /* .gitignore */,
 				B814514917DF736E0022664B /* README.md */,
 			);
 			name = other;
