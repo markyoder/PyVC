@@ -7,18 +7,14 @@
 	objects = {
 
 /* Begin PBXFileReference section */
+		B8122518180EF62E00939792 /* ids.py */ = {isa = PBXFileReference; lastKnownFileType = text.script.python; name = ids.py; path = local/ids.py; sourceTree = "<group>"; };
+		B8122519180EF62E00939792 /* sandbox.py */ = {isa = PBXFileReference; lastKnownFileType = text.script.python; name = sandbox.py; path = local/sandbox.py; sourceTree = "<group>"; };
+		B812251A180EF62E00939792 /* VC.py */ = {isa = PBXFileReference; lastKnownFileType = text.script.python; name = VC.py; path = local/VC.py; sourceTree = "<group>"; };
 		B812F043180C607200BC7E6C /* vcanalysis.py */ = {isa = PBXFileReference; lastKnownFileType = text.script.python; path = vcanalysis.py; sourceTree = "<group>"; };
-		B812F044180DB44400BC7E6C /* ids.py */ = {isa = PBXFileReference; lastKnownFileType = text.script.python; path = ids.py; sourceTree = "<group>"; };
 		B812F045180DB48000BC7E6C /* .gitignore */ = {isa = PBXFileReference; lastKnownFileType = text; path = .gitignore; sourceTree = "<group>"; };
 		B814514C17DF78100022664B /* LICENSE */ = {isa = PBXFileReference; lastKnownFileType = text; path = LICENSE; sourceTree = "<group>"; };
 		B814514D17DF78100022664B /* README.md */ = {isa = PBXFileReference; lastKnownFileType = text; path = README.md; sourceTree = "<group>"; };
-		B82A846E17D8FDE1000B1EF4 /* sandbox.py */ = {isa = PBXFileReference; lastKnownFileType = text.script.python; path = sandbox.py; sourceTree = "<group>"; };
 		B82FAEEA17DE904C008A9BA2 /* pyvc_tests.py */ = {isa = PBXFileReference; lastKnownFileType = text.script.python; path = pyvc_tests.py; sourceTree = "<group>"; };
-		B830942017D7F36B003F6D3A /* mptest.py */ = {isa = PBXFileReference; lastKnownFileType = text.script.python; path = mptest.py; sourceTree = "<group>"; };
-		B88584B11423C41B003DC67F /* vcal_py_options_example.dat */ = {isa = PBXFileReference; fileEncoding = 4; lastKnownFileType = text; path = vcal_py_options_example.dat; sourceTree = "<group>"; };
-		B8B11F9914BFA11A00147EDC /* vcal_py_trace_file_example.dat */ = {isa = PBXFileReference; fileEncoding = 4; lastKnownFileType = text; path = vcal_py_trace_file_example.dat; sourceTree = "<group>"; };
-		B8C068DD1805C3E000B3A3E7 /* VC.py */ = {isa = PBXFileReference; lastKnownFileType = text.script.python; path = VC.py; sourceTree = "<group>"; };
-		B8D0978B178B43390006310A /* siso_test.py */ = {isa = PBXFileReference; fileEncoding = 4; lastKnownFileType = text.script.python; path = siso_test.py; sourceTree = "<group>"; };
 		B8EFC34B17CFC629006B4107 /* vcsys.py */ = {isa = PBXFileReference; fileEncoding = 4; lastKnownFileType = text.script.python; path = vcsys.py; sourceTree = "<group>"; };
 		B8EFC34C17CFC6B1006B4107 /* vcgeometry.py */ = {isa = PBXFileReference; fileEncoding = 4; lastKnownFileType = text.script.python; path = vcgeometry.py; sourceTree = "<group>"; };
 		B8EFC34D17CFC785006B4107 /* vcevents.py */ = {isa = PBXFileReference; fileEncoding = 4; lastKnownFileType = text.script.python; path = vcevents.py; sourceTree = "<group>"; };
@@ -32,13 +28,9 @@
 		B814514A17DF77CB0022664B /* local */ = {
 			isa = PBXGroup;
 			children = (
-				B812F044180DB44400BC7E6C /* ids.py */,
-				B830942017D7F36B003F6D3A /* mptest.py */,
-				B82A846E17D8FDE1000B1EF4 /* sandbox.py */,
-				B8D0978B178B43390006310A /* siso_test.py */,
-				B88584B11423C41B003DC67F /* vcal_py_options_example.dat */,
-				B8B11F9914BFA11A00147EDC /* vcal_py_trace_file_example.dat */,
-				B8C068DD1805C3E000B3A3E7 /* VC.py */,
+				B8122518180EF62E00939792 /* ids.py */,
+				B8122519180EF62E00939792 /* sandbox.py */,
+				B812251A180EF62E00939792 /* VC.py */,
 			);
 			name = local;
 			sourceTree = "<group>";
