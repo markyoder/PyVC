@@ -1,5 +1,6 @@
 #!/usr/bin/env python
 from . import VCSys
+from . import vcexceptions
 from operator import itemgetter
 
 #-------------------------------------------------------------------------------
@@ -15,6 +16,12 @@ class VCGeometry(VCSys):
     def sections_with_elements(self, elements):
         ele_getter = itemgetter(*elements)
         return set(ele_getter(self.geometry_data.read(field='section_id')))
+    
+    def events_on_section(self, secid):
+        try:
+            return self.sim_data.file.root.events_by_section._v_children['section_{}'.format(secid)].read()
+        except KeyError:
+            raise vcexceptions.BadSectionID(secid)
 
     def get_section_info(self, section_filter=None, section_id=None):
         if section_filter is not None:

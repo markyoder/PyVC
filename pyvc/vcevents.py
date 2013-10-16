@@ -51,6 +51,45 @@ class VCEvents(VCSys):
         else:
             return 'id', 0, self.num_events-1
 
+    def get_event_data_from_evids(self, evids, requested_data, event_data=None, event_range=None, magnitude_filter=None):
+        
+        return_event_data = False
+        if event_data is None:
+            event_data = {}
+            return_event_data = True
+            for col_name in requested_data:
+                event_data[col_name] = []
+        
+        ev_type, ev_start, ev_stop = self.unpack_event_range(event_range, evid_range=True)
+        
+        # get rid of events outside the given range, and sort
+        eligible_evids = sorted(itertools.ifilter(lambda x: x>=ev_start and x<=ev_stop ,evids))
+        # if there are no events in the remaining set throw an error
+        if len(eligible_evids) == 0:
+            raise vcexceptions.NoEventsFound(event_range=event_range, magnitude_filter=magnitude_filter, section_filter=section_filter)
+        # if there is only one event the itemgetter doesnt work so just
+        # return the requested data
+        if len(eligible_evids) == 1:
+            event = self.event_data[eligible_evids[0]]
+            if magnitude_filter is not None:
+                exp_as_func = eval('lambda mag: ' + 'mag {}'.format(magnitude_filter))
+                self.process_events(event_data, requested_data, event, exp_as_func)
+            else:
+                self.process_events(event_data, requested_data, event)
+        else:
+            # an itemgetter for our (potentially) non contiguous event ids
+            ev_getter = itemgetter(*eligible_evids)
+            
+            # only apply the magnitude filter if necessary
+            if magnitude_filter is not None:
+                exp_as_func = eval('lambda mag: ' + 'mag {}'.format(magnitude_filter))
+                self.process_events(event_data, requested_data, ev_getter(self.event_data), exp_as_func)
+            else:
+                self.process_events(event_data, requested_data, ev_getter(self.event_data))
+
+        if return_event_data:
+            return event_data
+    
     #---------------------------------------------------------------------------
     # This method returns requested event data subject to several filters. The
     # data that will be returned is defined in requested_data which is a
@@ -136,31 +175,14 @@ class VCEvents(VCSys):
                     eligible_evids_tmp.append(self.sim_data.file.root.events_by_section._v_children['section_{}'.format(secid)].read())
                 except KeyError:
                     raise vcexceptions.BadSectionID(secid)
-            # flatten the list, remove duplicates, get rid of events outside the
-            # given range, and sort
-            eligible_evids = sorted(list(set(itertools.ifilter(lambda x: x>=ev_start and x<=ev_stop ,list(itertools.chain.from_iterable(eligible_evids_tmp))))))
-            # if there are no events in the remaining set throw an error
-            if len(eligible_evids) == 0:
-                raise vcexceptions.NoEventsFound(event_range=event_range, magnitude_filter=magnitude_filter, section_filter=section_filter)
-            # if there is only one event the itemgetter doesnt work so just
-            # return the requested data
-            if len(eligible_evids) == 1:
-                event = self.event_data[eligible_evids[0]]
-                if magnitude_filter is not None:
-                    exp_as_func = eval('lambda mag: ' + 'mag {}'.format(magnitude_filter))
-                    self.process_events(event_data, requested_data, event, exp_as_func)
-                else:
-                    self.process_events(event_data, requested_data, event)
-            else:
-                # an itemgetter for our (potentially) non contiguous event ids
-                ev_getter = itemgetter(*eligible_evids)
-                
-                # only apply the magnitude filter if necessary
-                if magnitude_filter is not None:
-                    exp_as_func = eval('lambda mag: ' + 'mag {}'.format(magnitude_filter))
-                    self.process_events(event_data, requested_data, ev_getter(self.event_data), exp_as_func)
-                else:
-                    self.process_events(event_data, requested_data, ev_getter(self.event_data))
+
+            self.get_event_data_from_evids(
+                list(set(list(itertools.chain.from_iterable(eligible_evids_tmp)))),
+                requested_data,
+                event_data=event_data,
+                event_range=event_range,
+                magnitude_filter=magnitude_filter
+            )
         else:
             #-------------------------------------------------------------------
             # If there is no section filter life is good. PyTables makes this

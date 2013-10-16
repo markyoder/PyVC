@@ -297,7 +297,27 @@ def standard_plot(output_file, x, y, legend_loc='best', **kwargs):
         # plot any additional lines
         if add_lines is not None:
             for line in add_lines:
-                eval('the_ax.{}(line[\'x\'], line[\'y\'], ls=ls_extra, lw=lw_extra, c=c_extra, label=line[\'label\'])'.format(axis_format), locals())
+                try:
+                    ls_extra = line['ls']
+                except KeyError:
+                    pass
+                try:
+                    lw_extra = line['lw']
+                except KeyError:
+                    pass
+                try:
+                    c_extra = line['c']
+                except KeyError:
+                    pass
+                try:
+                    yerr=line['y_error']
+                    add_axis_format = 'errorbar'
+                    y_error_key = 'yerr=line[\'y_error\'],'
+                except KeyError:
+                    y_error_key = ''
+                    add_axis_format = axis_format
+                
+                eval('the_ax.{0}(line[\'x\'], line[\'y\'], ls=ls_extra, {1} lw=lw_extra, c=c_extra, label=line[\'label\'])'.format(add_axis_format, y_error_key), locals())
         
         # set the fonts for the tick labels
         for label in the_ax.xaxis.get_ticklabels()+the_ax.yaxis.get_ticklabels():

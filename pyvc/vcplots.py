@@ -10,6 +10,121 @@ import multiprocessing
 import cPickle
 import networkx as nx
 
+def plot_recurrence_intervals(sim_file, output_file, event_range=None, section_filter=None, magnitude_filter=None):
+    #---------------------------------------------------------------------------
+    # Plot setup
+    #---------------------------------------------------------------------------
+    
+    num_cols = 5.0
+    
+    # dimensions
+    simw = 270.0
+    simh = 270.0
+    stm = 40.0
+    sbm = 40.0
+    slm = 50.0
+    srm = 10.0
+    res = 72.0
+    
+    # fonts
+    ticklabelfont = mfont.FontProperties(family='Arial', style='normal', variant='normal', size=9)
+    framelabelfont = mfont.FontProperties(family='Arial', style='normal', variant='normal', size=10)
+    legendfont = mfont.FontProperties(family='Arial', style='normal', variant='normal', size=9)
+    titlefont = mfont.FontProperties(family='Arial', style='normal', variant='normal', size=12)
+    subtitlefont = mfont.FontProperties(family='Arial', style='normal', variant='normal', size=8)
+    
+    #---------------------------------------------------------------------------
+    # Instantiate the VCSimData class using the with statement. Then instantiate
+    # VCEvents class from within the with block. This ensures that the sim data
+    # file is closed when the with block ends.
+    #---------------------------------------------------------------------------
+    with VCSimData() as sim_data:
+        # open the simulation data file
+        sim_data.open_file(sim_file)
+        
+        # instantiate the vc events class passing in an instance of the
+        # VCSimData class
+        events = VCEvents(sim_data)
+        geometry = VCGeometry(sim_data)
+        
+        # get the data
+        section_info = geometry.get_section_info(section_filter=section_filter)
+        
+        #-----------------------------------------------------------------------
+        # start the plot
+        #-----------------------------------------------------------------------
+        bins = np.linspace(0,250,50)
+        # calculate the final dimensions and create the figure and axis
+        spw = simw - slm - srm
+        sph = simh - stm - sbm
+        num_rows = math.ceil(float(len(section_info))/num_cols)
+        imw = math.ceil(simw * num_cols)
+        imh = math.ceil(simh * num_rows)
+        imwi = imw/res
+        imhi = imh/res
+        fig = mplt.figure(figsize=(imwi, imhi), dpi=res)
+        
+        #print num_cols, num_rows
+        curr_row = -1.0
+        for num, secid in enumerate(sorted(section_info.keys())):
+            curr_col = num%num_cols
+            if curr_col == 0.0:
+                curr_row += 1.0
+            #print curr_row, curr_col
+            the_ax = fig.add_axes(((slm + curr_col * simw)/imw, (sbm + (num_rows - curr_row - 1) * simh)/imh, spw/imw, sph/imh))
+            section_events = events.get_event_data_from_evids(
+                                        geometry.events_on_section(secid),
+                                        ['event_magnitude', 'event_year'],
+                                        event_range=event_range,
+                                        magnitude_filter='>=6.5'
+                                    )
+            intervals = [
+                x - section_events['event_year'][n-1]
+                for n,x in enumerate(section_events['event_year'])
+                if n != 0]
+                
+            intervals7 = [
+                x - section_events['event_year'][n-1]
+                for n,x in enumerate(section_events['event_year'])
+                if n != 0 and section_events['event_magnitude'][n] >= 7.0]
+            
+            
+            hist, bins = np.histogram(intervals, bins=bins, density=True)
+            hist7, bins7 = np.histogram(intervals7, bins=bins, density=True)
+            mean = np.mean(intervals)
+            std = np.std(intervals)
+            mean7 = np.mean(intervals7)
+            std7 = np.std(intervals7)
+            
+            the_ax.step(bins[0:-1], hist, where='post', label='m>6.5')
+            the_ax.step(bins7[0:-1], hist7, where='post', label='m>7')
+            
+            for label in the_ax.xaxis.get_ticklabels()+the_ax.yaxis.get_ticklabels():
+                label.set_fontproperties(ticklabelfont)
+                
+            the_ax.set_ylabel('Prob. Density', fontproperties=framelabelfont)
+            the_ax.set_xlabel('Recurrence Time [yr]', fontproperties=framelabelfont)
+            
+            the_ax.autoscale_view(tight=True)
+            
+            the_ax.set_title('{} {}'.format(secid,section_info[secid]['name']), position=(0.0,1.04), ha='left', fontproperties=titlefont)
+            the_ax.text(0.0, 1.01, 'm>6.5: mean {mean:0.1f} std {std:0.1f}, m>7.0 mean {mean7:0.1f} std {std7:0.1f}'.format(mean=mean, std=std, mean7=mean7, std7=std7), va='bottom', ha='left', transform=the_ax.transAxes, fontproperties=subtitlefont)
+    
+            the_ax.legend(prop=legendfont)
+
+    # Get the plot format and save the file
+    plot_format = output_file.split('.')[-1]
+    if plot_format != 'png' and plot_format != 'pdf':
+        raise vcexceptions.PlotFormatNotSupported(plot_format)
+    else:
+        fig.savefig(output_file, format=plot_format, dpi=res)
+
+        #for i, ev_eles in enumerate(event_data['event_elements']):
+        #    for this_sid in geometry.sections_with_elements(ev_eles):
+
+#-------------------------------------------------------------------------------
+# plots an event graph
+#-------------------------------------------------------------------------------
 def plot_graph(graph_file, output_file, degree_cut=None, label_degree_cut=0.25, self_loops=True):
     G = cPickle.load(open(graph_file, 'rb'))
     
@@ -114,7 +229,6 @@ def plot_graph(graph_file, output_file, degree_cut=None, label_degree_cut=0.25, 
     A=nx.to_agraph(Gsub)        # convert to a graphviz graph
     #A.layout()            # neato layout
     A.draw(output_file, prog='sfdp', args='-Gsize="40!" -Goverlap=prism -Grepulsiveforce=1.0 -GsmoothType="graph_dist" -Goutputorder="edgesfirst" -Nfixedsize="true" -Nfontname="Helvetica"')
-
 
 #-------------------------------------------------------------------------------
 # space-time plot
@@ -281,10 +395,19 @@ def magnitude_rupture_area(sim_file, output_file, event_range=None, section_filt
     # get the plot label which will depend on the filters
     plot_label = vcutils.get_plot_label(sim_file, event_range=event_range, section_filter=section_filter, magnitude_filter=magnitude_filter)
     
+    x_WC = np.linspace(2.2,5184)
+    y_WC = 4.07 + 0.98 * np.log10(x_WC)
+    y_error_plus_WC = 4.07+0.06 + (0.98+0.03) * np.log10(x_WC)
+    y_error_minus_WC = 4.07-0.06 + (0.98-0.03) * np.log10(x_WC)
+    y_error_WC = [np.subtract(y_WC, y_error_minus_WC), np.subtract(y_error_plus_WC, y_WC)]
+
     # do the standard plot
     vcutils.standard_plot(output_file, event_area_kmsq, event_data['event_magnitude'],
         axis_format='semilogx',
-        add_lines=[{'label':'binned average', 'x':x_ave, 'y':y_ave}],
+        add_lines=[
+            {'label':'binned average', 'x':x_ave, 'y':y_ave},
+            {'label':'WC', 'x':x_WC, 'y':y_WC, 'ls':'--', 'c':'red'}
+        ],
         axis_labels = {'x':r'log(Rupture Area [km$^\mathsf{2}$])', 'y':'Magnitude'},
         plot_label='Magnitude-Rupture Area{}'.format(plot_label)
     )
@@ -319,11 +442,20 @@ def magnitude_average_slip(sim_file, output_file, event_range=None, section_filt
     
     # get the plot label which will depend on the filters
     plot_label = vcutils.get_plot_label(sim_file, event_range=event_range, section_filter=section_filter, magnitude_filter=magnitude_filter)
+
+    x_WC = np.linspace(0.05,8, num=10)
+    y_WC = 6.93 + 0.82 * np.log10(x_WC)
+    y_error_plus_WC = 6.93+0.05 + (0.82+0.1) * np.log10(x_WC)
+    y_error_minus_WC = 6.93-0.05 + (0.82-0.1) * np.log10(x_WC)
+    y_error_WC = [np.subtract(y_WC, y_error_minus_WC), np.subtract(y_error_plus_WC, y_WC)]
     
     # do the standard plot
     vcutils.standard_plot(output_file, event_data['event_average_slip'], event_data['event_magnitude'],
         axis_format='semilogx',
-        add_lines=[{'label':'binned average', 'x':x_ave, 'y':y_ave}],
+        add_lines=[
+            {'label':'binned average', 'x':x_ave, 'y':y_ave},
+            {'label':'WC', 'x':x_WC, 'y':y_WC, 'ls':'--', 'c':'red'}
+        ],
         axis_labels = {'y':'Magnitude', 'x':'log(Average Slip [m])'},
         plot_label='Magnitude-Average Slip{}'.format(plot_label)
     )
@@ -357,16 +489,25 @@ def average_slip_surface_rupture_length(sim_file, output_file, event_range=None,
     event_surface_rupture_length_km = [vcutils.Converter().m_km(x) for x in event_data['event_surface_rupture_length']]
     
     # get the binned averages of the data
-    x_ave, y_ave = vcutils.calculate_averages(event_data['event_surface_rupture_length'], event_data['event_average_slip'])
+    x_ave, y_ave = vcutils.calculate_averages(event_surface_rupture_length_km, event_data['event_average_slip'])
     
     # get the plot label which will depend on the filters
     plot_label = vcutils.get_plot_label(sim_file, event_range=event_range, section_filter=section_filter, magnitude_filter=magnitude_filter)
+
+    x_WC = np.linspace(3.8,432, num=10)
+    y_WC = 10.0**(-1.43 + 0.88 * np.log10(x_WC))
+    y_error_plus_WC = 10.0**(-1.43+0.18 + (0.88+0.11) * np.log10(x_WC))
+    y_error_minus_WC = 10.0**(-1.43-0.18 + (0.88-0.11) * np.log10(x_WC))
+    y_error_WC = [np.subtract(y_WC, y_error_minus_WC), np.subtract(y_error_plus_WC, y_WC)]
     
     # do the standard plot
-    vcutils.standard_plot(output_file, event_data['event_surface_rupture_length'], event_data['event_average_slip'],
+    vcutils.standard_plot(output_file, event_surface_rupture_length_km, event_data['event_average_slip'],
         axis_format='loglog',
-        add_lines=[{'label':'binned average', 'x':x_ave, 'y':y_ave}],
-        axis_labels = {'y':'log(Average Slip [m])', 'x':'log(Surface Rupture Length [m])'},
+        add_lines=[
+            {'label':'binned average', 'x':x_ave, 'y':y_ave},
+            {'label':'WC', 'x':x_WC, 'y':y_WC, 'ls':'--', 'c':'red'}
+        ],
+        axis_labels = {'y':'log(Average Slip [m])', 'x':'log(Surface Rupture Length [km])'},
         plot_label='Average Slip-Surface Rupture Length{}'.format(plot_label)
     )
 
@@ -419,10 +560,15 @@ def frequency_magnitude(sim_file, output_file, event_range=None, section_filter=
     # get the plot label which will depend on the filters
     plot_label = vcutils.get_plot_label(sim_file, event_range=event_range, section_filter=section_filter, magnitude_filter=magnitude_filter)
     
+    # for the UCERF2 error bars
+    x_UCERF = [5.0, 5.5, 6.0, 6.5, 7.0, 7.5]
+    y_UCERF = [4.73, 2.15, 0.71, 0.24, 0.074, 0.020]
+    y_error_UCERF = [[1.2, 0.37, 0.22, 0.09, 0.04, 0.016],[1.50, 0.43, 0.28, 0.11, 0.06, 0.035]]
+    
     # do the standard plot
     vcutils.standard_plot(output_file, x, y,
         axis_format='semilogy',
-        add_lines=[{'label':'b=1', 'x':x_b1, 'y':y_b1}],
+        add_lines=[{'label':'b=1', 'x':x_b1, 'y':y_b1}, {'label':'UCERF2', 'x':x_UCERF, 'y':y_UCERF, 'ls':'--', 'c':'red', 'y_error':y_error_UCERF}],
         axis_labels = {'y':'log(# events per year)', 'x':'Magnitude'},
         plot_label='Frequency-Magnitude{}'.format(plot_label),
         connect_points=True,
