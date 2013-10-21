@@ -10,6 +10,9 @@ import multiprocessing
 import cPickle
 import networkx as nx
 
+#-------------------------------------------------------------------------------
+# plots recurrence intervals
+#-------------------------------------------------------------------------------
 def plot_recurrence_intervals(sim_file, output_file, event_range=None, section_filter=None, magnitude_filter=None):
     #---------------------------------------------------------------------------
     # Plot setup
@@ -64,7 +67,9 @@ def plot_recurrence_intervals(sim_file, output_file, event_range=None, section_f
         imhi = imh/res
         fig = mplt.figure(figsize=(imwi, imhi), dpi=res)
         
-        #print num_cols, num_rows
+        #-----------------------------------------------------------------------
+        # Calculate the recurrence intervals and plot.
+        #-----------------------------------------------------------------------
         curr_row = -1.0
         for num, secid in enumerate(sorted(section_info.keys())):
             curr_col = num%num_cols
@@ -118,9 +123,6 @@ def plot_recurrence_intervals(sim_file, output_file, event_range=None, section_f
         raise vcexceptions.PlotFormatNotSupported(plot_format)
     else:
         fig.savefig(output_file, format=plot_format, dpi=res)
-
-        #for i, ev_eles in enumerate(event_data['event_elements']):
-        #    for this_sid in geometry.sections_with_elements(ev_eles):
 
 #-------------------------------------------------------------------------------
 # plots an event graph
