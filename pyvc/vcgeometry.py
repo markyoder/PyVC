@@ -12,6 +12,56 @@ class VCGeometry(VCSys):
         
         # the table we need from the simulation data
         self.geometry_data = self.sim_data.file.root.block_info_table
+        self.model_extents = self.sim_data.file.root.model_extents
+        self.base_lat_lon = self.sim_data.file.root.base_lat_lon
+    
+    @property
+    def base_lat(self):
+        return self.base_lat_lon[0]
+    
+    @property
+    def base_lon(self):
+        return self.base_lat_lon[1]
+    
+    @property
+    def min_lat(self):
+        return self.model_extents.col('min_lat')[0]
+    
+    @property
+    def max_lat(self):
+        return self.model_extents.col('max_lat')[0]
+    
+    @property
+    def min_lon(self):
+        return self.model_extents.col('min_lon')[0]
+    
+    @property
+    def max_lon(self):
+        return self.model_extents.col('max_lon')[0]
+    
+    @property
+    def min_x(self):
+        return self.model_extents.col('min_x')[0]
+    
+    @property
+    def max_x(self):
+        return self.model_extents.col('max_x')[0]
+    
+    @property
+    def min_y(self):
+        return self.model_extents.col('min_y')[0]
+    
+    @property
+    def max_y(self):
+        return self.model_extents.col('max_y')[0]
+    
+    @property
+    def min_z(self):
+        return self.model_extents.col('min_z')[0]
+    
+    @property
+    def max_z(self):
+        return self.model_extents.col('max_z')[0]
     
     def sections_with_elements(self, elements):
         ele_getter = itemgetter(*elements)

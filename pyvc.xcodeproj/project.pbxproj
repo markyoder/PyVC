@@ -33,6 +33,8 @@
 		B812F045180DB48000BC7E6C /* .gitignore */ = {isa = PBXFileReference; lastKnownFileType = text; path = .gitignore; sourceTree = "<group>"; };
 		B814514C17DF78100022664B /* LICENSE */ = {isa = PBXFileReference; lastKnownFileType = text; path = LICENSE; sourceTree = "<group>"; };
 		B814514D17DF78100022664B /* README.md */ = {isa = PBXFileReference; lastKnownFileType = text; path = README.md; sourceTree = "<group>"; };
+		B8198A9B1819A7D10024E235 /* okada_test.py */ = {isa = PBXFileReference; lastKnownFileType = text.script.python; name = okada_test.py; path = local/okada_test.py; sourceTree = "<group>"; };
+		B8198A9C181ACEEE0024E235 /* MyVector.py */ = {isa = PBXFileReference; lastKnownFileType = text.script.python; name = MyVector.py; path = local/MyVector.py; sourceTree = "<group>"; };
 		B82FAEEA17DE904C008A9BA2 /* pyvc_tests.py */ = {isa = PBXFileReference; lastKnownFileType = text.script.python; path = pyvc_tests.py; sourceTree = "<group>"; };
 		B83B0D731815A6FA00593A8B /* disp_calc */ = {isa = PBXFileReference; explicitFileType = "compiled.mach-o.executable"; includeInIndex = 0; path = disp_calc; sourceTree = BUILT_PRODUCTS_DIR; };
 		B83B0D761815A6FA00593A8B /* main.cpp */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.cpp.cpp; path = main.cpp; sourceTree = "<group>"; };
@@ -62,9 +64,11 @@
 		B814514A17DF77CB0022664B /* local */ = {
 			isa = PBXGroup;
 			children = (
+				B8198A9C181ACEEE0024E235 /* MyVector.py */,
 				B8122518180EF62E00939792 /* ids.py */,
 				B8122519180EF62E00939792 /* sandbox.py */,
 				B812251A180EF62E00939792 /* VC.py */,
+				B8198A9B1819A7D10024E235 /* okada_test.py */,
 			);
 			name = local;
 			sourceTree = "<group>";

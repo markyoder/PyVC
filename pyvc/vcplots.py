@@ -9,6 +9,45 @@ import math
 import multiprocessing
 import cPickle
 import networkx as nx
+from operator import itemgetter
+
+#-------------------------------------------------------------------------------
+# plots event displacements
+#-------------------------------------------------------------------------------
+def plot_event_displacements(sim_file, output_file, evnum, fringes=True):
+    with VCSimData() as sim_data:
+        # open the simulation data file
+        sim_data.open_file(sim_file)
+        
+        # instantiate the vc classes passing in an instance of the VCSimData
+        # class
+        events = VCEvents(sim_data)
+        geometry = VCGeometry(sim_data)
+        
+        min_lat = geometry.min_lat
+        max_lat = geometry.max_lat
+        min_lon = geometry.min_lon
+        max_lon = geometry.max_lon
+        min_x = geometry.min_x
+        max_x = geometry.max_x
+        min_y = geometry.min_y
+        max_y = geometry.max_y
+        min_z = geometry.min_z
+        max_z = geometry.max_z
+
+        event_data = events[evnum]
+        event_element_ids = events.get_event_elements(evnum)
+        ele_getter = itemgetter(*event_element_ids)
+        event_element_data = ele_getter(geometry)
+
+    print min_lat, max_lat
+    print min_lon, max_lon
+    print min_x, max_x
+    print min_y, max_y
+    print min_z, max_z
+    #print event_data
+    #for ele in event_element_data:
+    #    print ele
 
 #-------------------------------------------------------------------------------
 # plots recurrence intervals

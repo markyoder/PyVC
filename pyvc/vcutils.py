@@ -11,6 +11,8 @@ import matplotlib.lines as mlines
 import matplotlib.colors as mcolor
 import matplotlib.colorbar as mcolorbar
 import numpy as np
+import sys
+import quakelib
 
 import math
 import calendar
@@ -25,6 +27,8 @@ def linear_interp(x, x_min, x_max, y_min, y_max):
 #-------------------------------------------------------------------------------
 # A class to perform unit conversions.
 #-------------------------------------------------------------------------------
+'''
+This is now in quakelib
 class Converter:
         def __init__(self):
                 self.lat0 = 31.5
@@ -128,7 +132,7 @@ class Converter:
             conv = Geodesic.WGS84.Direct(self.lat0, self.lon0, azi1, s12)
             
             return (conv["lat2"], conv["lon2"])
-            
+'''
 #-------------------------------------------------------------------------------
 # parse all of the filters and return a string for the plot title
 #-------------------------------------------------------------------------------
@@ -829,7 +833,7 @@ class VCSimData(object):
         if self.file_path is None:
             self.file_path = file_path
         self.file = tables.open_file(self.file_path)
-        
+
         #-----------------------------------------------------------------------
         # check to see if we need to calculate additional data
         #-----------------------------------------------------------------------
@@ -856,7 +860,109 @@ class VCSimData(object):
         
         if self.do_das_id or self.do_depth_id:
             self.calculate_additional_block_data()
-
+        
+        if 'model_extents' not in self.file.root._v_children.keys():
+            self.calculate_model_extents()
+    
+    def calculate_model_extents(self):
+        #-----------------------------------------------------------------------
+        # get info from the original file
+        #-----------------------------------------------------------------------
+        block_info_table = self.file.root.block_info_table
+    
+        #-----------------------------------------------------------------------
+        # calculate the model extents
+        #-----------------------------------------------------------------------
+        print 'Calculating model extents'
+        
+        start_time = time.time()
+        
+        sys_max_z = -sys.float_info.max
+        sys_min_z = sys.float_info.max
+        sys_max_x = -sys.float_info.max
+        sys_min_x = sys.float_info.max
+        sys_max_y = -sys.float_info.max
+        sys_min_y = sys.float_info.max
+        
+        for block in block_info_table:
+            min_x = min((block['m_x_pt1'], block['m_x_pt2'], block['m_x_pt3'], block['m_x_pt4']))
+            max_x = max((block['m_x_pt1'], block['m_x_pt2'], block['m_x_pt3'], block['m_x_pt4']))
+        
+            min_y = min((block['m_y_pt1'], block['m_y_pt2'], block['m_y_pt3'], block['m_y_pt4']))
+            max_y = max((block['m_y_pt1'], block['m_y_pt2'], block['m_y_pt3'], block['m_y_pt4']))
+            
+            min_z = min((block['m_z_pt1'], block['m_z_pt2'], block['m_z_pt3'], block['m_z_pt4']))
+            max_z = max((block['m_z_pt1'], block['m_z_pt2'], block['m_z_pt3'], block['m_z_pt4']))
+            
+            if min_x < sys_min_x:
+                sys_min_x = min_x
+            if max_x > sys_max_x:
+                sys_max_x = max_x
+                
+            if min_y < sys_min_y:
+                sys_min_y = min_y
+            if max_y > sys_max_y:
+                sys_max_y = max_y
+            
+            if min_z < sys_min_z:
+                sys_min_z = min_z
+            if max_z > sys_max_z:
+                sys_max_z = max_z
+        
+        base_lat_lon_table = self.file.root.base_lat_lon
+        conv = quakelib.Conversion(base_lat_lon_table[0], base_lat_lon_table[1])
+        
+        ne_corner = conv.convert2LatLon( quakelib.Vec3(sys_max_x, sys_max_y, 0.0) )
+        sw_corner = conv.convert2LatLon( quakelib.Vec3(sys_min_x, sys_min_y, 0.0) )
+    
+        self.file.close()
+    
+        print 'Done! {} seconds'.format(time.time() - start_time)
+        
+        print 'Creating new tables'
+        table_start_time = time.time()
+        
+        self.file = tables.open_file(self.file_path, 'a')
+        
+        desc = {
+            'min_x':tables.Float64Col(dflt=0.0),
+            'max_x':tables.Float64Col(dflt=0.0),
+            'min_y':tables.Float64Col(dflt=0.0),
+            'max_y':tables.Float64Col(dflt=0.0),
+            'min_z':tables.Float64Col(dflt=0.0),
+            'max_z':tables.Float64Col(dflt=0.0),
+            'min_lat':tables.Float64Col(dflt=0.0),
+            'max_lat':tables.Float64Col(dflt=0.0),
+            'min_lon':tables.Float64Col(dflt=0.0),
+            'max_lon':tables.Float64Col(dflt=0.0)
+        }
+        
+        model_extents = self.file.create_table('/', 'model_extents', desc, 'Model Extents')
+        
+        model_extents.row.append()
+        model_extents.flush()
+        
+        model_extents.cols.min_x[0] = sys_min_x
+        model_extents.cols.max_x[0] = sys_max_x
+        model_extents.cols.min_y[0] = sys_min_y
+        model_extents.cols.max_y[0] = sys_max_y
+        model_extents.cols.min_z[0] = sys_min_z
+        model_extents.cols.max_z[0] = sys_max_z
+        model_extents.cols.min_lat[0] = sw_corner.lat()
+        model_extents.cols.max_lat[0] = ne_corner.lat()
+        model_extents.cols.min_lon[0] = sw_corner.lon()
+        model_extents.cols.max_lon[0] = ne_corner.lon()
+        
+        print 'Done! {} seconds'.format(time.time() - table_start_time)
+        
+        #-----------------------------------------------------------------------
+        # close the file and reopen it with the new table
+        #-----------------------------------------------------------------------
+        self.file.close()
+        self.file = tables.open_file(self.file_path)
+        
+        print 'Total time {} seconds'.format(time.time() - start_time)
+        
     def calculate_additional_block_data(self):
         #-----------------------------------------------------------------------
         # get info from the original file
