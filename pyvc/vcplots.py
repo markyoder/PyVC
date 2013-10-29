@@ -48,6 +48,8 @@ class DisplacementGridProcessor(multiprocessing.Process):
             except Queue.Empty:
                 break
             
+            print 'processing elements {} - {}'.format(start, end)
+            
             # empty arrays to store the results
             dX = np.empty((self.lat_size, self.lon_size))
             dY = np.empty((self.lat_size, self.lon_size))
@@ -77,7 +79,7 @@ class DisplacementGridProcessor(multiprocessing.Process):
             #calculate the displacements
             lame_lambda = 3.2e10
             lame_mu = 3.0e10
-            print 'start'
+            
             disp_1d = event.P_event_displacements(self.field_1d, lame_lambda, lame_lambda)
             disp = np.array(disp_1d).reshape((self.lat_size,self.lon_size))
         
