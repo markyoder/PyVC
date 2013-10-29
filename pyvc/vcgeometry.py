@@ -63,6 +63,17 @@ class VCGeometry(VCSys):
     def max_z(self):
         return self.model_extents.col('max_z')[0]
     
+    def get_fault_traces(self):
+        traces = {}
+        for block in self.geometry_data.where('(m_trace_flag_pt1 != 0) & (m_trace_flag_pt4 != 0)'):
+            try:
+                traces[block['section_id']].append( (block['m_x_pt1'], block['m_y_pt1'], block['m_z_pt1']) )
+                traces[block['section_id']].append( (block['m_x_pt4'], block['m_y_pt4'], block['m_z_pt4']) )
+            except KeyError:
+                traces[block['section_id']] = [ (block['m_x_pt1'], block['m_y_pt1'], block['m_z_pt1']) ]
+                traces[block['section_id']].append( (block['m_x_pt4'], block['m_y_pt4'], block['m_z_pt4']) )
+        return traces
+    
     def sections_with_elements(self, elements):
         ele_getter = itemgetter(*elements)
         return set(ele_getter(self.geometry_data.read(field='section_id')))
