@@ -31,6 +31,16 @@ class VCEvents(VCSys):
         #return set([x['block_id'] for x in self.sweep_data[self.event_data[evnum]['start_sweep_rec']:self.event_data[evnum]['end_sweep_rec']]])
         return set(self.sweep_data.read(self.event_data[evnum]['start_sweep_rec'],self.event_data[evnum]['end_sweep_rec'], field='block_id'))
     
+    def get_event_element_slips(self, evnum):
+        slips = {}
+        for sweep in self.sweep_data[self.event_data[evnum]['start_sweep_rec']:self.event_data[evnum]['end_sweep_rec']]:
+            try:
+                slips[sweep['block_id']] += sweep['slip']
+            except KeyError:
+                slips[sweep['block_id']] = sweep['slip']
+        return slips
+
+    
     def get_event_slip_area(self, evnum):
         areas = {}
         total_slip = 0.0

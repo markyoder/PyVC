@@ -4,17 +4,443 @@ from pyvc import vcutils
 from pyvc import vcexceptions
 import matplotlib.pyplot as mplt
 import matplotlib.font_manager as mfont
+import matplotlib.colors as mcolor
 import numpy as np
 import math
 import multiprocessing
+import Queue
 import cPickle
 import networkx as nx
 from operator import itemgetter
+from mpl_toolkits.basemap import Basemap, maskoceans, interp
+import quakelib
+import time
+
+class DisplacementGridProcessor(multiprocessing.Process):
+    def __init__(self, work_queue, result_queue, field_1d, event_element_data, event_element_slips, lat_size, lon_size):#, min_lat, min_lon, max_lat, max_lon):
+        
+        # base class initialization
+        multiprocessing.Process.__init__(self)
+ 
+        # job management stuff
+        self.work_queue = work_queue
+        self.result_queue = result_queue
+        self.kill_received = False
+        
+        self.field_1d = field_1d
+        self.event_element_data = event_element_data
+        self.event_element_slips = event_element_slips
+        self.lat_size = lat_size
+        self.lon_size = lon_size
+    
+        #self.counter = counter
+        #self.total_tasks = total_tasks
+    
+    def run(self):
+        while not self.kill_received:
+            # get a task
+            try:
+                start, end = self.work_queue.get_nowait()
+            except Queue.Empty:
+                break
+            
+            # empty arrays to store the results
+            dX = np.empty((self.lat_size, self.lon_size))
+            dY = np.empty((self.lat_size, self.lon_size))
+            dZ = np.empty((self.lat_size, self.lon_size))
+            
+            # create a element list
+            elements = quakelib.EventElementList()
+            
+            # create elements and add them to the element list
+            for element in self.event_element_data[start:end]:
+                #print element
+                ele = quakelib.EventElement4()
+                ele.set_rake(element['rake_rad'])
+                ele.set_slip(self.event_element_slips[element['block_id']])
+                ele.set_vert(0, element['m_x_pt1'], element['m_y_pt1'], element['m_z_pt1'])
+                ele.set_vert(1, element['m_x_pt2'], element['m_y_pt2'], element['m_z_pt2'])
+                ele.set_vert(2, element['m_x_pt3'], element['m_y_pt3'], element['m_z_pt3'])
+                ele.set_vert(3, element['m_x_pt4'], element['m_y_pt4'], element['m_z_pt4'])
+                elements.append(ele)
+            
+            # create an event
+            event = quakelib.P_Event()
+            
+            # add the elements to the event
+            event.add_elements(elements)
+            
+            #calculate the displacements
+            lame_lambda = 3.2e10
+            lame_mu = 3.0e10
+            print 'start'
+            disp_1d = event.P_event_displacements(self.field_1d, lame_lambda, lame_lambda)
+            disp = np.array(disp_1d).reshape((self.lat_size,self.lon_size))
+        
+            it = np.nditer(dX, flags=['multi_index'])
+            while not it.finished:
+                dX[it.multi_index] = disp[it.multi_index][0]
+                dY[it.multi_index] = disp[it.multi_index][1]
+                dZ[it.multi_index] = disp[it.multi_index][2]
+                it.iternext()
+            
+            # store the result
+            processed_displacements = {}
+            processed_displacements['dX'] = dX
+            processed_displacements['dY'] = dY
+            processed_displacements['dZ'] = dZ
+            self.result_queue.put(processed_displacements)
+
+#-------------------------------------------------------------------------------
+# A class to handle the plotting of event displacements
+#-------------------------------------------------------------------------------
+class VCDisplacementMapPlotter:
+    #---------------------------------------------------------------------------
+    # If outut_file is none returns an instance for further plotting
+    #---------------------------------------------------------------------------
+    def __init__(self, min_lat, max_lat, min_lon, max_lon, base_lat, base_lon, output_file=None, padding=0.01, map_res='i', map_proj='cyl'):
+        self.output_file = None
+        #self.min_lon = min_lon
+        #self.max_lon = max_lon
+        #self.min_lat = min_lat
+        #self.max_lat = max_lat
+        #self.padding = pading
+        
+        # These are constrained this way so we can plot on 1024x780 for the
+        # animations
+        max_plot_width = 690.0
+        max_plot_height = 658.0
+        self.plot_resolution = 72.0
+        
+        self.convert = quakelib.Conversion(base_lat, base_lon)
+        
+        #-----------------------------------------------------------------------
+        # DisplacementmMap configuration
+        #-----------------------------------------------------------------------
+        # values for the fringes map are denoted by a {value}_f
+        self.dmc = {
+            'font':               mfont.FontProperties(family='Arial', style='normal', variant='normal', weight='normal'),
+            'font_bold':          mfont.FontProperties(family='Arial', style='normal', variant='normal', weight='bold'),
+            'cmap':               mplt.get_cmap('YlOrRd'),
+            'cmap_f':             mplt.get_cmap('jet'),
+        #water
+            'water_color':          '#4eacf4',
+            'water_color_f':        '#4eacf4',
+        #map boundaries
+            'boundary_color':       '#000000',
+            'boundary_color_f':     '#ffffff',
+            'boundary_width':       1.0,
+            'coastline_color':      '#000000',
+            'coastline_color_f':    '#ffffff',
+            'coastline_width':      1.0,
+            'country_color':        '#000000',
+            'country_color_f':      '#ffffff',
+            'country_width':        1.0,
+            'state_color':          '#000000',
+            'state_color_f':        '#ffffff',
+            'state_width':          1.0,
+        #rivers
+            'river_width':          0.25,
+        #faults
+            'fault_color':          '#000000',
+            'fault_color_f':        '#ffffff',
+            'event_fault_color':    '#ff0000',
+            'event_fault_color_f':  '#ffffff',
+            'fault_width':          0.5,
+        #lat lon grid
+            'grid_color':           '#000000',
+            'grid_color_f':         '#ffffff',
+            'grid_width':           0.0,
+            'num_grid_lines':       5,
+        #map props
+            'map_resolution':       'i',
+            'plot_resolution':      72.0,
+            'map_tick_color':       '#000000',
+            'map_tick_color_f':     '#000000',
+            'map_frame_color':      '#000000',
+            'map_frame_color_f':    '#000000',
+            'map_frame_width':      1,
+            'map_fontsize':         12,
+            'arrow_inset':          10.0,
+            'arrow_fontsize':       9.0,
+            'cb_fontsize':          10.0,
+            'cb_fontcolor':         '#000000',
+            'cb_fontcolor_f':       '#000000',
+            'cb_height':            20.0,
+            'cb_margin_t':          10.0
+        }
+        
+        lon_range = max_lon - min_lon
+        lat_range = max_lat - min_lat
+        max_range = max((lon_range, lat_range))
+        self.padded_min_lon = min_lon - lon_range*padding
+        self.padded_min_lat = min_lat - lat_range*padding
+        self.padded_max_lon = max_lon + lon_range*padding
+        self.padded_max_lat = max_lat + lat_range*padding
+        
+        #-----------------------------------------------------------------------
+        # m1, fig1 is the oceans and the continents. This will lie behind the
+        # masked data image.
+        #-----------------------------------------------------------------------
+        self.m1 = Basemap(
+            llcrnrlon=self.padded_min_lon,
+            llcrnrlat=self.padded_min_lat,
+            urcrnrlon=self.padded_max_lon,
+            urcrnrlat=self.padded_max_lat,
+            lat_0=(self.padded_max_lat+self.padded_min_lat)/2.0,
+            lon_0=(self.padded_max_lon+self.padded_min_lon)/2.0,
+            resolution=map_res,
+            projection=map_proj,
+            suppress_ticks=True
+        )
+        #-----------------------------------------------------------------------
+        # m2, fig2 is the plotted deformation data.
+        #-----------------------------------------------------------------------
+        self.m2 = Basemap(
+            llcrnrlon=self.padded_min_lon,
+            llcrnrlat=self.padded_min_lat,
+            urcrnrlon=self.padded_max_lon,
+            urcrnrlat=self.padded_max_lat,
+            lat_0=(self.padded_max_lat+self.padded_min_lat)/2.0,
+            lon_0=(self.padded_max_lon+self.padded_min_lon)/2.0,
+            resolution=map_res,
+            projection=map_proj,
+            suppress_ticks=True
+        )
+        #-----------------------------------------------------------------------
+        # m3, fig3 is the ocean land mask.
+        #-----------------------------------------------------------------------
+        self.m3 = Basemap(
+            llcrnrlon=self.padded_min_lon,
+            llcrnrlat=self.padded_min_lat,
+            urcrnrlon=self.padded_max_lon,
+            urcrnrlat=self.padded_max_lat,
+            lat_0=(self.padded_max_lat+self.padded_min_lat)/2.0,
+            lon_0=(self.padded_max_lon+self.padded_min_lon)/2.0,\
+            resolution=map_res,
+            projection=map_proj,
+            suppress_ticks=True
+        )
+        #-----------------------------------------------------------------------
+        # m4, fig4 is all of the boundary data.
+        #-----------------------------------------------------------------------
+        self.m4 = Basemap(
+            llcrnrlon=self.padded_min_lon,
+            llcrnrlat=self.padded_min_lat,
+            urcrnrlon=self.padded_max_lon,
+            urcrnrlat=self.padded_max_lat,
+            lat_0=(self.padded_max_lat+self.padded_min_lat)/2.0,
+            lon_0=(self.padded_max_lon+self.padded_min_lon)/2.0,
+            resolution=map_res,
+            projection=map_proj,
+            suppress_ticks=True
+        )
+        
+        #-----------------------------------------------------------------------
+        # Calculate the map grid
+        #-----------------------------------------------------------------------
+        # aspect is height/width
+        '''
+        if self.m1.aspect > 1.0:
+            plot_height = max_plot_height
+            plot_width = max_plot_height/self.m1.aspect
+        else:
+            plot_width = max_plot_width
+            plot_height = max_plot_width*self.m1.aspect
+            
+        self.lons_1d = np.linspace(self.padded_min_lon,self.padded_max_lon,int(plot_width))
+        self.lats_1d = np.linspace(self.padded_min_lat,self.padded_max_lat,int(plot_height))
+        
+        _lons_1d = quakelib.FloatList()
+        _lats_1d = quakelib.FloatList()
+        
+        for lon in self.lons_1d:
+            _lons_1d.append(lon)
+        
+        for lat in self.lats_1d:
+            _lats_1d.append(lat)
+        
+        self.field_1d = self.convert.P_convertArray2xyz(_lats_1d,_lons_1d)
+        '''
+        self.lats_1d,self.lons_1d,self.field_1d = cPickle.load(open('local/test_grid.pkl','rb'))
+        
+    def calculate_displacements(self, event_element_data, event_element_slips):
+        
+        if len(event_element_slips) == 1:
+            event_element_data = [event_element_data]
+        
+        num_processes = multiprocessing.cpu_count()
+            
+        seg = int(round(float(len(event_element_slips))/float(num_processes)))
+        
+        if seg < 1:
+            seg = 1
+        
+        segmented_elements_indexes = []
+            
+        for i in range(num_processes):
+            if i == num_processes - 1:
+                end_index = len(event_element_slips)
+            else:
+                end_index = seg*int(i + 1)
+            start_index = int(i) * seg
+            if start_index != end_index:
+                segmented_elements_indexes.append((start_index, end_index))
+    
+        work_queue = multiprocessing.Queue()
+        for job in segmented_elements_indexes:
+            work_queue.put(job)
+        
+        # create a queue to pass to workers to store the results
+        result_queue = multiprocessing.Queue()
+        
+        # spawn workers
+        for i in range(len(segmented_elements_indexes)):
+            worker = DisplacementGridProcessor(work_queue, result_queue, self.field_1d, event_element_data, event_element_slips, self.lats_1d.size,self.lons_1d.size)
+            worker.start()
+        
+        # collect the results off the queue
+        results = []
+        for i in range(len(segmented_elements_indexes)):
+            results.append(result_queue.get())
+
+        
+        self.dX = None
+        self.dY = None
+        self.dZ = None
+        
+        for result_num, result in enumerate(results):
+            if self.dX is None:
+                self.dX = result['dX']
+            else:
+                self.dX += result['dX']
+            
+            if self.dY is None:
+                self.dY = result['dY']
+            else:
+                self.dY += result['dY']
+                
+            if self.dZ is None:
+                self.dZ = result['dZ']
+            else:
+                self.dZ += result['dZ']
+
+    def plot(self, fringes=True):
+        # grab all of the properties
+        arial = self.dmc['font']
+        arial_bold = self.dmc['font_bold']
+    
+        # properties that are fringes dependent
+        if fringes:
+            cmap            = self.dmc['cmap_f']
+            water_color     = self.dmc['water_color_f']
+            boundary_color  = self.dmc['boundary_color_f']
+            coastline_color = self.dmc['coastline_color_f']
+            country_color   = self.dmc['country_color_f']
+            state_color     = self.dmc['state_color_f']
+            fault_color     = self.dmc['fault_color_f']
+            map_tick_color  = self.dmc['map_tick_color_f']
+            map_frame_color = self.dmc['map_frame_color_f']
+            grid_color      = self.dmc['grid_color_f']
+            cb_fontcolor    = self.dmc['cb_fontcolor_f']
+        else:
+            cmap            = self.dmc['cmap']
+            water_color     = self.dmc['water_color']
+            boundary_color  = self.dmc['boundary_color']
+            coastline_color = self.dmc['coastline_color']
+            country_color   = self.dmc['country_color']
+            state_color     = self.dmc['state_color']
+            fault_color     = self.dmc['fault_color']
+            map_tick_color  = self.dmc['map_tick_color']
+            map_frame_color = self.dmc['map_frame_color']
+            grid_color      = self.dmc['grid_color']
+            cb_fontcolor    = self.dmc['cb_fontcolor']
+            
+        # properties that are not fringes dependent
+        land_color      = cmap(0)
+        boundary_width  = self.dmc['boundary_width']
+        coastline_width = self.dmc['coastline_width']
+        country_width   = self.dmc['country_width']
+        state_width     = self.dmc['state_width']
+        river_width     = self.dmc['river_width']
+        fault_width     = self.dmc['fault_width']
+        map_frame_width = self.dmc['map_frame_width']
+        map_fontsize    = self.dmc['map_fontsize']
+        arrow_inset     = self.dmc['arrow_inset']
+        arrow_fontsize  = self.dmc['arrow_fontsize']
+        cb_fontsize     = self.dmc['cb_fontsize']
+        cb_height       = self.dmc['cb_height']
+        cb_margin_t     = self.dmc['cb_margin_t']
+        grid_width      = self.dmc['grid_width']
+        num_grid_lines  = self.dmc['num_grid_lines']
+        
+        # set up all the plot dimensions in inches
+        mw = self.lons_1d.size
+        mh = self.lats_1d.size
+        mwi = mw/self.plot_resolution
+        mhi = mh/self.plot_resolution
+
+        fig1 = mplt.figure(figsize=(mwi, mhi), dpi=self.plot_resolution)
+        self.m1.ax = fig1.add_axes((0,0,1,1))
+        self.m1.drawmapboundary(
+            color=boundary_color,
+            linewidth=0,
+            fill_color=water_color
+        )
+        self.m1.fillcontinents(
+            color=land_color,
+            lake_color=water_color
+        )
+
+        fig2 = mplt.figure(figsize=(mwi, mhi), dpi=self.plot_resolution)
+        self.m2.ax = fig2.add_axes((0,0,1,1))
+        
+        look_azimuth = 0.0
+        look_elevation = 0.0
+        dMags = -self.dX * math.sin(look_azimuth) * math.cos(look_elevation) - self.dY * math.cos(look_azimuth) * math.cos(look_elevation) + self.dZ * math.sin(look_elevation)
+
+        #prepare the colors for the plot
+        wavelength = 0.03
+        dMags_transformed = self.m2.transform_scalar(dMags, self.lons_1d, self.lats_1d, self.lons_1d.size, self.lats_1d.size)
+        dMags_colors = np.empty((dMags_transformed.shape[0],dMags_transformed.shape[1],4))
+        
+        if fringes:
+            it = np.nditer(dMags_transformed, flags=['multi_index'])
+            while not it.finished:
+                r,g,b,a = cmap(math.modf(abs(dMags_transformed[it.multi_index])/wavelength)[0])
+                dMags_colors[it.multi_index[0], it.multi_index[1], 0] = r
+                dMags_colors[it.multi_index[0], it.multi_index[1], 1] = g
+                dMags_colors[it.multi_index[0], it.multi_index[1], 2] = b
+                dMags_colors[it.multi_index[0], it.multi_index[1], 3] = a
+                it.iternext()
+            im = self.m2.imshow(dMags_colors, interpolation='spline36')
+        else:
+            dMags_colors = np.fabs(dMags_transformed)
+            vmax = np.amax(dMags_colors)
+            if vmax <= 1:
+                mod_vmax = 1
+            elif vmax > 1 and vmax <= 10:
+                mod_vmax = 10
+            elif vmax > 10 and vmax <= 100:
+                mod_vmax = 100
+            elif vmax > 100 and vmax <= 1000:
+                mod_vmax = 1000
+            elif vmax > 1000:
+                mod_vmax = 1000
+            im = self.m2.imshow(dMags_colors, cmap=cmap, norm=mcolor.LogNorm(vmin=1e-4, vmax=mod_vmax, clip=True))
+
+        fig2.savefig('local/test.png', format='png', dpi=self.plot_resolution)
+
+
+
+
+
 
 #-------------------------------------------------------------------------------
 # plots event displacements
 #-------------------------------------------------------------------------------
-def plot_event_displacements(sim_file, output_file, evnum, fringes=True):
+def plot_event_displacements(sim_file, output_file, evnum, fringes=True, padding=0.01):
+    start_time = time.time()
     with VCSimData() as sim_data:
         # open the simulation data file
         sim_data.open_file(sim_file)
@@ -34,20 +460,32 @@ def plot_event_displacements(sim_file, output_file, evnum, fringes=True):
         max_y = geometry.max_y
         min_z = geometry.min_z
         max_z = geometry.max_z
+        base_lat = geometry.base_lat
+        base_lon = geometry.base_lon
 
         event_data = events[evnum]
-        event_element_ids = events.get_event_elements(evnum)
-        ele_getter = itemgetter(*event_element_ids)
+        event_element_slips = events.get_event_element_slips(evnum)
+        ele_getter = itemgetter(*event_element_slips.keys())
         event_element_data = ele_getter(geometry)
-
-    print min_lat, max_lat
-    print min_lon, max_lon
-    print min_x, max_x
-    print min_y, max_y
-    print min_z, max_z
-    #print event_data
-    #for ele in event_element_data:
-    #    print ele
+    
+    #print event_element_data
+    print 'Done initilizing data {} seconds'.format(time.time() - start_time)
+    print '{} elements in event'.format(len(event_element_slips))
+    
+    start_time = time.time()
+    dmp = VCDisplacementMapPlotter(min_lat, max_lat, min_lon, max_lon, base_lat, base_lon, output_file=output_file, padding=0.01)
+    print 'Done initilizing grid {} seconds'.format(time.time() - start_time)
+    
+    start_time = time.time()
+    #dmp.calculate_displacements(event_element_data, event_element_slips)
+    dmp.dX, dmp.dY, dmp.dZ = cPickle.load(open('local/test_disp.pkl','rb'))
+    print 'Done calculating displacements {} seconds'.format(time.time() - start_time)
+    
+    #cPickle.dump((dmp.dX, dmp.dY, dmp.dZ), open('tmp.pkl','wb'))
+    
+    start_time = time.time()
+    dmp.plot(fringes=fringes)
+    print 'Done plotting {} seconds'.format(time.time() - start_time)
 
 #-------------------------------------------------------------------------------
 # plots recurrence intervals
