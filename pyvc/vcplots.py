@@ -21,7 +21,7 @@ import time
 from PIL import Image
 
 class DisplacementGridProcessor(multiprocessing.Process):
-    def __init__(self, work_queue, result_queue, field_1d, event_element_data, event_element_slips, lat_size, lon_size):#, min_lat, min_lon, max_lat, max_lon):
+    def __init__(self, work_queue, result_queue, field_1d, event_element_data, event_element_slips, lat_size, lon_size, cutoff):#, min_lat, min_lon, max_lat, max_lon):
         
         # base class initialization
         multiprocessing.Process.__init__(self)
@@ -36,6 +36,7 @@ class DisplacementGridProcessor(multiprocessing.Process):
         self.event_element_slips = event_element_slips
         self.lat_size = lat_size
         self.lon_size = lon_size
+        self.cutoff = cutoff
     
         #self.counter = counter
         #self.total_tasks = total_tasks
@@ -80,7 +81,10 @@ class DisplacementGridProcessor(multiprocessing.Process):
             lame_lambda = 3.2e10
             lame_mu = 3.0e10
             
-            disp_1d = event.event_displacements(self.field_1d, lame_lambda, lame_lambda)
+            if self.cutoff is None:
+                disp_1d = event.event_displacements(self.field_1d, lame_lambda, lame_lambda)
+            else:
+                disp_1d = event.event_displacements(self.field_1d, lame_lambda, lame_lambda, self.cutoff)
             disp = np.array(disp_1d).reshape((self.lat_size,self.lon_size))
         
             it = np.nditer(dX, flags=['multi_index'])
@@ -268,7 +272,7 @@ class VCDisplacementMapPlotter:
     # Sets up the displacement calculation and then passes it to the
     # DisplacementGridProcessor class.
     #---------------------------------------------------------------------------
-    def calculate_displacements(self, event_element_data, event_element_slips):
+    def calculate_displacements(self, event_element_data, event_element_slips, cutoff=None):
         
         # How many seperate CPUs do we have
         num_processes = multiprocessing.cpu_count()
@@ -299,7 +303,15 @@ class VCDisplacementMapPlotter:
         
         # Spawn workers
         for i in range(len(segmented_elements_indexes)):
-            worker = DisplacementGridProcessor(work_queue, result_queue, self.field_1d, event_element_data, event_element_slips, self.lats_1d.size,self.lons_1d.size)
+            worker = DisplacementGridProcessor(work_queue,
+                result_queue,
+                self.field_1d,
+                event_element_data,
+                event_element_slips,
+                self.lats_1d.size,
+                self.lons_1d.size,
+                cutoff
+            )
             worker.start()
         
         # Collect the results off the queue
@@ -517,7 +529,7 @@ class VCDisplacementMapPlotter:
 #-------------------------------------------------------------------------------
 # plots event displacements
 #-------------------------------------------------------------------------------
-def plot_event_displacements(sim_file, output_file, evnum, fringes=True, padding=0.01):
+def plot_event_displacements(sim_file, output_file, evnum, fringes=True, padding=0.01, cutoff=None):
     start_time = time.time()
     with VCSimData() as sim_data:
         # open the simulation data file
@@ -554,7 +566,7 @@ def plot_event_displacements(sim_file, output_file, evnum, fringes=True, padding
     print 'Done initilizing plotter - {} seconds'.format(time.time() - start_time)
     
     start_time = time.time()
-    dmp.calculate_displacements(event_element_data, event_element_slips)
+    dmp.calculate_displacements(event_element_data, event_element_slips, cutoff=cutoff)
     #dmp.dX, dmp.dY, dmp.dZ = cPickle.load(open('local/test_disp.pkl','rb'))
     print 'Done calculating displacements - {} seconds'.format(time.time() - start_time)
     cPickle.dump((dmp.dX, dmp.dY, dmp.dZ), open('local/test_disp.pkl','wb'))
