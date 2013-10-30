@@ -71,7 +71,7 @@ class DisplacementGridProcessor(multiprocessing.Process):
                 elements.append(ele)
             
             # create an event
-            event = quakelib.P_Event()
+            event = quakelib.Event()
             
             # add the elements to the event
             event.add_elements(elements)
@@ -80,7 +80,7 @@ class DisplacementGridProcessor(multiprocessing.Process):
             lame_lambda = 3.2e10
             lame_mu = 3.0e10
             
-            disp_1d = event.P_event_displacements(self.field_1d, lame_lambda, lame_lambda)
+            disp_1d = event.event_displacements(self.field_1d, lame_lambda, lame_lambda)
             disp = np.array(disp_1d).reshape((self.lat_size,self.lon_size))
         
             it = np.nditer(dX, flags=['multi_index'])
@@ -263,18 +263,23 @@ class VCDisplacementMapPlotter:
         self.fault_traces = {}
         for secid in fault_traces.iterkeys():
              self.fault_traces[secid] = zip(*[(lambda y: (y.lat(),y.lon()))(self.convert.convert2LatLon(quakelib.Vec3(x[0], x[1], x[2]))) for x in fault_traces[secid]])
-        
+    
+    #---------------------------------------------------------------------------
+    # Sets up the displacement calculation and then passes it to the
+    # DisplacementGridProcessor class.
+    #---------------------------------------------------------------------------
     def calculate_displacements(self, event_element_data, event_element_slips):
         
+        # How many seperate CPUs do we have
         num_processes = multiprocessing.cpu_count()
-            
-        seg = int(round(float(len(event_element_slips))/float(num_processes)))
         
+        # Figure out how many segments we will break the task up into
+        seg = int(round(float(len(event_element_slips))/float(num_processes)))
         if seg < 1:
             seg = 1
         
+        # Break up the job.
         segmented_elements_indexes = []
-            
         for i in range(num_processes):
             if i == num_processes - 1:
                 end_index = len(event_element_slips)
@@ -283,28 +288,29 @@ class VCDisplacementMapPlotter:
             start_index = int(i) * seg
             if start_index != end_index:
                 segmented_elements_indexes.append((start_index, end_index))
-    
+        
+        # Add all of the jobs to a work queue
         work_queue = multiprocessing.Queue()
         for job in segmented_elements_indexes:
             work_queue.put(job)
         
-        # create a queue to pass to workers to store the results
+        # Create a queue to pass to workers to store the results
         result_queue = multiprocessing.Queue()
         
-        # spawn workers
+        # Spawn workers
         for i in range(len(segmented_elements_indexes)):
             worker = DisplacementGridProcessor(work_queue, result_queue, self.field_1d, event_element_data, event_element_slips, self.lats_1d.size,self.lons_1d.size)
             worker.start()
         
-        # collect the results off the queue
+        # Collect the results off the queue
         results = []
         for i in range(len(segmented_elements_indexes)):
             results.append(result_queue.get())
         
+        # Combine the results
         self.dX = None
         self.dY = None
         self.dZ = None
-        
         for result_num, result in enumerate(results):
             if self.dX is None:
                 self.dX = result['dX']
@@ -320,7 +326,11 @@ class VCDisplacementMapPlotter:
                 self.dZ = result['dZ']
             else:
                 self.dZ += result['dZ']
-    
+
+    #---------------------------------------------------------------------------
+    # Calculates the look angles based on a set of elements. This will set the
+    # angles to be looking along the average strike of the fault.
+    #---------------------------------------------------------------------------
     def calculate_look_angles(self, element_data):
         strikes = []
         rakes = []
@@ -400,13 +410,28 @@ class VCDisplacementMapPlotter:
             self.look_elevation = 0.0
         
         dMags = -self.dX * math.sin(self.look_azimuth) * math.cos(self.look_elevation) - self.dY * math.cos(self.look_azimuth) * math.cos(self.look_elevation) + self.dZ * math.sin(self.look_elevation)
-
+        
+        
         #prepare the colors for the plot
         dMags_transformed = self.m2.transform_scalar(dMags, self.lons_1d, self.lats_1d, self.lons_1d.size, self.lats_1d.size)
-        dMags_colors = np.empty((dMags_transformed.shape[0],dMags_transformed.shape[1],4))
         
+        #print 'start colors'
         if fringes:
-            #'''
+            dMags_colors = np.empty((dMags_transformed.shape[0],dMags_transformed.shape[1],4))
+            r,g,b,a = cmap(0)
+            dMags_colors[:,:,0].fill(r)
+            dMags_colors[:,:,1].fill(g)
+            dMags_colors[:,:,2].fill(b)
+            dMags_colors[:,:,3].fill(a)
+            non_zeros = dMags_transformed.nonzero()
+            for n,i in enumerate(non_zeros[0]):
+                j = non_zeros[1][n]
+                r,g,b,a = cmap(math.modf(abs(dMags_transformed[i,j])/self.wavelength)[0])
+                dMags_colors[i, j, 0] = r
+                dMags_colors[i, j, 1] = g
+                dMags_colors[i, j, 2] = b
+                dMags_colors[i, j, 3] = a
+            '''
             it = np.nditer(dMags_transformed, flags=['multi_index'])
             while not it.finished:
                 r,g,b,a = cmap(math.modf(abs(dMags_transformed[it.multi_index])/self.wavelength)[0])
@@ -415,9 +440,10 @@ class VCDisplacementMapPlotter:
                 dMags_colors[it.multi_index[0], it.multi_index[1], 2] = b
                 dMags_colors[it.multi_index[0], it.multi_index[1], 3] = a
                 it.iternext()
-            cPickle.dump(dMags_colors, open('local/test_colors.pkl','wb'))
-            #'''
+            #cPickle.dump(dMags_colors, open('local/test_colors.pkl','wb'))
+            '''
             #dMags_colors = cPickle.load(open('local/test_colors.pkl','rb'))
+            #print dMags_colors
             im = self.m2.imshow(dMags_colors, interpolation='spline36')
         else:
             dMags_colors = np.fabs(dMags_transformed)
@@ -433,7 +459,8 @@ class VCDisplacementMapPlotter:
             elif vmax > 1000:
                 mod_vmax = 1000
             im = self.m2.imshow(dMags_colors, cmap=cmap, norm=mcolor.LogNorm(vmin=1e-4, vmax=mod_vmax, clip=True))
-        
+        #print 'end colors'
+
         #-----------------------------------------------------------------------
         # Fig3 is the land/sea mask.
         #-----------------------------------------------------------------------

@@ -75,8 +75,11 @@ class VCGeometry(VCSys):
         return traces
     
     def sections_with_elements(self, elements):
-        ele_getter = itemgetter(*elements)
-        return set(ele_getter(self.geometry_data.read(field='section_id')))
+        if len(elements) > 1:
+            ele_getter = itemgetter(*elements)
+            return set(ele_getter(self.geometry_data.read(field='section_id')))
+        else:
+            return [self.geometry_data[elements[0]]['section_id']]
     
     def events_on_section(self, secid):
         try:
