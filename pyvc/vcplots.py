@@ -123,7 +123,7 @@ class VCDisplacementMapPlotter:
         self.cutoff_min_size = 20.0
         self.cutoff_min = 46.5
         self.cutoff_p2_size = 65.0
-        self.cutoff_p2 = 80.0
+        self.cutoff_p2 = 90.0
         #self.output_file = None
         #self.min_lon = min_lon
         #self.max_lon = max_lon
