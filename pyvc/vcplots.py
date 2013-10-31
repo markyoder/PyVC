@@ -21,7 +21,7 @@ import time
 from PIL import Image
 
 class DisplacementGridProcessor(multiprocessing.Process):
-    def __init__(self, work_queue, result_queue, field_1d, event_element_data, event_element_slips, lat_size, lon_size, cutoff):#, min_lat, min_lon, max_lat, max_lon):
+    def __init__(self, work_queue, result_queue, field_1d, event_element_data, event_element_slips, lat_size, lon_size, cutoff, event_center, event_radius):#, min_lat, min_lon, max_lat, max_lon):
         
         # base class initialization
         multiprocessing.Process.__init__(self)
@@ -37,6 +37,8 @@ class DisplacementGridProcessor(multiprocessing.Process):
         self.lat_size = lat_size
         self.lon_size = lon_size
         self.cutoff = cutoff
+        self.event_center = event_center
+        self.event_radius = event_radius
     
         #self.counter = counter
         #self.total_tasks = total_tasks
@@ -77,6 +79,10 @@ class DisplacementGridProcessor(multiprocessing.Process):
             # add the elements to the event
             event.add_elements(elements)
             
+            # set the event center and radius
+            event.set_event_center(self.event_center)
+            event.set_event_radius(self.event_radius)
+            
             #calculate the displacements
             lame_lambda = 3.2e10
             lame_mu = 3.0e10
@@ -112,6 +118,12 @@ class VCDisplacementMapPlotter:
         self.look_azimuth = None
         self.look_elevation = None
         self.wavelength = 0.03
+        
+        # Define how the cutoff value scales if it is not explitly set
+        self.cutoff_min_size = 20.0
+        self.cutoff_min = 46.5
+        self.cutoff_p2_size = 65.0
+        self.cutoff_p2 = 80.0
         #self.output_file = None
         #self.min_lon = min_lon
         #self.max_lon = max_lon
@@ -273,12 +285,64 @@ class VCDisplacementMapPlotter:
     # DisplacementGridProcessor class.
     #---------------------------------------------------------------------------
     def calculate_displacements(self, event_element_data, event_element_slips, cutoff=None):
+    
+        #-----------------------------------------------------------------------
+        # We need to calculate the event center and radius
+        #-----------------------------------------------------------------------
+        # create a element list
+        elements = quakelib.EventElementList()
         
+        # create elements and add them to the element list
+        for element in event_element_data:
+            ele = quakelib.EventElement4()
+            ele.set_vert(0, element['m_x_pt1'], element['m_y_pt1'], element['m_z_pt1'])
+            ele.set_vert(1, element['m_x_pt2'], element['m_y_pt2'], element['m_z_pt2'])
+            ele.set_vert(2, element['m_x_pt3'], element['m_y_pt3'], element['m_z_pt3'])
+            ele.set_vert(3, element['m_x_pt4'], element['m_y_pt4'], element['m_z_pt4'])
+            elements.append(ele)
+        
+        # create an event
+        event = quakelib.Event()
+        
+        # add the elements to the event
+        event.add_elements(elements)
+        
+        # find the event radius and center
+        event_center = event.event_center()
+        event_radius = event.event_radius()
+        
+        #print event_center, event_radius
+        
+        #self.event_center = event_center
+        #self.event_radius = event_radius
+        
+        #-----------------------------------------------------------------------
+        # If the cutoff is none (ie not explicitly set) calculate the cutoff for
+        # this event.
+        #-----------------------------------------------------------------------
+        event_size = float(len(event_element_slips))
+        if cutoff is None:
+            if  event_size >= self.cutoff_min_size:
+                cutoff = vcutils.linear_interp(
+                    event_size,
+                    self.cutoff_min_size,
+                    self.cutoff_p2_size,
+                    self.cutoff_min,
+                    self.cutoff_p2
+                    )
+            else:
+                cutoff = self.cutoff_min
+        
+        print cutoff
+        #-----------------------------------------------------------------------
+        # Now break up the work and start the workers
+        #-----------------------------------------------------------------------
+
         # How many seperate CPUs do we have
         num_processes = multiprocessing.cpu_count()
         
         # Figure out how many segments we will break the task up into
-        seg = int(round(float(len(event_element_slips))/float(num_processes)))
+        seg = int(round(event_size/float(num_processes)))
         if seg < 1:
             seg = 1
         
@@ -310,7 +374,9 @@ class VCDisplacementMapPlotter:
                 event_element_slips,
                 self.lats_1d.size,
                 self.lons_1d.size,
-                cutoff
+                cutoff,
+                event_center,
+                event_radius
             )
             worker.start()
         
@@ -560,11 +626,12 @@ def plot_event_displacements(sim_file, output_file, evnum, fringes=True, padding
     print 'Done initilizing data - {} seconds'.format(time.time() - start_time)
     print '{} elements in event'.format(len(event_element_slips))
     print '{} sections in event'.format(len(event_sections))
+    print event_sections
     
     start_time = time.time()
     dmp = VCDisplacementMapPlotter(min_lat, max_lat, min_lon, max_lon, base_lat, base_lon, fault_traces, padding=0.01)
     print 'Done initilizing plotter - {} seconds'.format(time.time() - start_time)
-    
+
     start_time = time.time()
     dmp.calculate_displacements(event_element_data, event_element_slips, cutoff=cutoff)
     #dmp.dX, dmp.dY, dmp.dZ = cPickle.load(open('local/test_disp.pkl','rb'))
@@ -752,7 +819,12 @@ def plot_event_displacements(sim_file, output_file, evnum, fringes=True, padding
     for sid, sec_trace in dmp.fault_traces.iteritems():
         trace_Xs, trace_Ys = m4(sec_trace[1], sec_trace[0])
         
-        m4.plot(trace_Xs, trace_Ys, color=fault_color, linewidth=fault_width, solid_capstyle='round', solid_joinstyle='round')
+        if sid in event_sections:
+            linewidth = fault_width + 3
+        else:
+            linewidth = fault_width
+
+        m4.plot(trace_Xs, trace_Ys, color=fault_color, linewidth=linewidth, solid_capstyle='round', solid_joinstyle='round')
 
     #plot the cb
     cb_left_frac = 70.0/pw
