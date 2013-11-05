@@ -110,7 +110,7 @@ class DisplacementGridProcessor(multiprocessing.Process):
 #-------------------------------------------------------------------------------
 # A class to handle the plotting of event displacements
 #-------------------------------------------------------------------------------
-class VCDisplacementMapPlotter:
+class VCDisplacementMapPlotter(object):
     #---------------------------------------------------------------------------
     # If outut_file is none returns an instance for further plotting
     #---------------------------------------------------------------------------
