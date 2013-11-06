@@ -20,25 +20,27 @@ import quakelib
 import time
 from PIL import Image
 
-class DisplacementGridProcessor(multiprocessing.Process):
-    def __init__(self, work_queue, result_queue, field_1d, event_element_data, event_element_slips, lat_size, lon_size, cutoff, event_center, event_radius):#, min_lat, min_lon, max_lat, max_lon):
+class VCFieldProcessor(multiprocessing.Process):
+    def __init__(self, work_queue, result_queue, field_1d, event_element_data, event_element_slips, lat_size, lon_size, cutoff, type='displacement'):#, min_lat, min_lon, max_lat, max_lon):
         
         # base class initialization
-        multiprocessing.Process.__init__(self)
+        #multiprocessing.Process.__init__(self)
+        super(VCFieldProcessor,self).__init__()
  
         # job management stuff
         self.work_queue = work_queue
         self.result_queue = result_queue
         self.kill_received = False
         
+        self.type = type
         self.field_1d = field_1d
         self.event_element_data = event_element_data
         self.event_element_slips = event_element_slips
         self.lat_size = lat_size
         self.lon_size = lon_size
         self.cutoff = cutoff
-        self.event_center = event_center
-        self.event_radius = event_radius
+        #self.event_center = event_center
+        #self.event_radius = event_radius
     
         #self.counter = counter
         #self.total_tasks = total_tasks
@@ -52,11 +54,6 @@ class DisplacementGridProcessor(multiprocessing.Process):
                 break
             
             print 'processing elements {} - {}'.format(start, end)
-            
-            # empty arrays to store the results
-            dX = np.empty((self.lat_size, self.lon_size))
-            dY = np.empty((self.lat_size, self.lon_size))
-            dZ = np.empty((self.lat_size, self.lon_size))
             
             # create a element list
             elements = quakelib.EventElementList()
@@ -79,64 +76,248 @@ class DisplacementGridProcessor(multiprocessing.Process):
             # add the elements to the event
             event.add_elements(elements)
             
-            # set the event center and radius
-            event.set_event_center(self.event_center)
-            event.set_event_radius(self.event_radius)
-            
-            #calculate the displacements
+            # lame params
             lame_lambda = 3.2e10
             lame_mu = 3.0e10
             
-            if self.cutoff is None:
-                disp_1d = event.event_displacements(self.field_1d, lame_lambda, lame_lambda)
-            else:
-                disp_1d = event.event_displacements(self.field_1d, lame_lambda, lame_lambda, self.cutoff)
-            disp = np.array(disp_1d).reshape((self.lat_size,self.lon_size))
+            if self.type == 'displacement':
+                # calculate the displacements
+                if self.cutoff is None:
+                    disp_1d = event.event_displacements(self.field_1d, lame_lambda, lame_lambda)
+                else:
+                    disp_1d = event.event_displacements(self.field_1d, lame_lambda, lame_lambda, self.cutoff)
+                disp = np.array(disp_1d).reshape((self.lat_size,self.lon_size))
+                
+                # empty arrays to store the results
+                dX = np.empty((self.lat_size, self.lon_size))
+                dY = np.empty((self.lat_size, self.lon_size))
+                dZ = np.empty((self.lat_size, self.lon_size))
+                
+                it = np.nditer(dX, flags=['multi_index'])
+                while not it.finished:
+                    dX[it.multi_index] = disp[it.multi_index][0]
+                    dY[it.multi_index] = disp[it.multi_index][1]
+                    dZ[it.multi_index] = disp[it.multi_index][2]
+                    it.iternext()
+                
+                # store the result
+                processed_displacements = {}
+                processed_displacements['dX'] = dX
+                processed_displacements['dY'] = dY
+                processed_displacements['dZ'] = dZ
+                self.result_queue.put(processed_displacements)
+            elif self.type == 'gravity':
+                # calculate the gravity changes
+                dGrav_1d = event.event_gravity_changes(self.field_1d, lame_lambda, lame_lambda)
+                dGrav = np.array(dGrav_1d).reshape((self.lat_size,self.lon_size))
+                
+                # store the result
+                self.result_queue.put(dGrav)
+
+class VCField(object):
+    def __init__(self, min_lat, max_lat, min_lon, max_lon, base_lat, base_lon, padding, map_res, map_proj):
+        # These are constrained this way so we can plot on 1024x780 for the
+        # animations
+        max_map_width = 690.0
+        max_map_height = 658.0
         
-            it = np.nditer(dX, flags=['multi_index'])
-            while not it.finished:
-                dX[it.multi_index] = disp[it.multi_index][0]
-                dY[it.multi_index] = disp[it.multi_index][1]
-                dZ[it.multi_index] = disp[it.multi_index][2]
-                it.iternext()
-            
-            # store the result
-            processed_displacements = {}
-            processed_displacements['dX'] = dX
-            processed_displacements['dY'] = dY
-            processed_displacements['dZ'] = dZ
-            self.result_queue.put(processed_displacements)
+        # A conversion instance for doing the lat-lon to x-y conversions
+        self.convert = quakelib.Conversion(base_lat, base_lon)
+        
+        # Calculate the lat-lon range based on the min-max and the padding
+        lon_range = max_lon - min_lon
+        lat_range = max_lat - min_lat
+        max_range = max((lon_range, lat_range))
+        self.min_lon = min_lon - lon_range*padding
+        self.min_lat = min_lat - lat_range*padding
+        self.max_lon = max_lon + lon_range*padding
+        self.max_lat = max_lat + lat_range*padding
+        
+        # We need a map instance to calculate the aspect ratio
+        map = Basemap(
+            llcrnrlon=self.min_lon,
+            llcrnrlat=self.min_lat,
+            urcrnrlon=self.max_lon,
+            urcrnrlat=self.max_lat,
+            lat_0=(self.max_lat+self.min_lat)/2.0,
+            lon_0=(self.max_lon+self.min_lon)/2.0,
+            resolution=map_res,
+            projection=map_proj,
+            suppress_ticks=True
+        )
+
+        # Using the aspect ratio find the actual map width and height in pixels
+        if map.aspect > 1.0:
+            map_height = max_map_height
+            map_width = max_map_height/map.aspect
+        else:
+            map_width = max_map_width
+            map_height = max_map_width*map.aspect
+
+        self.lons_1d = np.linspace(self.min_lon,self.max_lon,int(map_width))
+        self.lats_1d = np.linspace(self.min_lat,self.max_lat,int(map_height))
+        
+        _lons_1d = quakelib.FloatList()
+        _lats_1d = quakelib.FloatList()
+        
+        for lon in self.lons_1d:
+            _lons_1d.append(lon)
+        
+        for lat in self.lats_1d:
+            _lats_1d.append(lat)
+        
+        self.field_1d = self.convert.convertArray2xyz(_lats_1d,_lons_1d)
+
+    def calculate_field_values(self, event_element_data, event_element_slips, cutoff, type='displacement'):
+        #-----------------------------------------------------------------------
+        # Break up the work and start the workers
+        #-----------------------------------------------------------------------
+        
+        # How many elements in the event
+        event_size = float(len(event_element_slips))
+        
+        # How many seperate CPUs do we have
+        num_processes = multiprocessing.cpu_count()
+        
+        # Figure out how many segments we will break the task up into
+        seg = int(round(event_size/float(num_processes)))
+        if seg < 1:
+            seg = 1
+        
+        # Break up the job.
+        segmented_elements_indexes = []
+        for i in range(num_processes):
+            if i == num_processes - 1:
+                end_index = len(event_element_slips)
+            else:
+                end_index = seg*int(i + 1)
+            start_index = int(i) * seg
+            if start_index != end_index:
+                segmented_elements_indexes.append((start_index, end_index))
+        
+        # Add all of the jobs to a work queue
+        work_queue = multiprocessing.Queue()
+        for job in segmented_elements_indexes:
+            work_queue.put(job)
+        
+        # Create a queue to pass to workers to store the results
+        result_queue = multiprocessing.Queue()
+        
+        # Spawn workers
+        for i in range(len(segmented_elements_indexes)):
+            worker = VCFieldProcessor(work_queue,
+                result_queue,
+                self.field_1d,
+                event_element_data,
+                event_element_slips,
+                self.lats_1d.size,
+                self.lons_1d.size,
+                cutoff,
+                type=type
+            )
+            worker.start()
+        
+        # Collect the results off the queue
+        self.results = []
+        for i in range(len(segmented_elements_indexes)):
+            self.results.append(result_queue.get())
+
+class VCGravityField(VCField):
+    def __init__(self, min_lat, max_lat, min_lon, max_lon, base_lat, base_lon, padding=0.01, map_res='i', map_proj='cyl'):
+        
+        super(VCGravityField,self).__init__(min_lat, max_lat, min_lon, max_lon, base_lat, base_lon, padding, map_res, map_proj)
+
+    #---------------------------------------------------------------------------
+    # Sets up the gravity change calculation and then passes it to the
+    # VCFieldProcessor class.
+    #---------------------------------------------------------------------------
+    def calculate_field_values(self, event_element_data, event_element_slips, cutoff=None):
+        
+        #-----------------------------------------------------------------------
+        # Run the field calculation. The results are stored in self.results
+        #-----------------------------------------------------------------------
+        super(VCGravityField,self).calculate_field_values(event_element_data, event_element_slips, cutoff, type='gravity')
+        
+        #-----------------------------------------------------------------------
+        # Combine the results
+        #-----------------------------------------------------------------------
+        self.dG = None
+        for result in self.results:
+            if self.dG is None:
+                self.dG = result
+            else:
+                self.dG += result
+
 
 #-------------------------------------------------------------------------------
-# A class to handle the plotting of event displacements
+# A class to handle calculating event displacements
 #-------------------------------------------------------------------------------
-class VCDisplacementMapPlotter(object):
-    #---------------------------------------------------------------------------
-    # If outut_file is none returns an instance for further plotting
-    #---------------------------------------------------------------------------
-    def __init__(self, min_lat, max_lat, min_lon, max_lon, base_lat, base_lon, fault_traces, padding=0.01, map_res='i', map_proj='cyl'):
-        self.look_azimuth = None
-        self.look_elevation = None
-        self.wavelength = 0.03
+class VCDisplacementField(VCField):
+    def __init__(self, min_lat, max_lat, min_lon, max_lon, base_lat, base_lon, padding=0.01, map_res='i', map_proj='cyl'):
+        
+        super(VCDisplacementField,self).__init__(min_lat, max_lat, min_lon, max_lon, base_lat, base_lon, padding, map_res, map_proj)
         
         # Define how the cutoff value scales if it is not explitly set
         self.cutoff_min_size = 20.0
         self.cutoff_min = 46.5
         self.cutoff_p2_size = 65.0
         self.cutoff_p2 = 90.0
-        #self.output_file = None
-        #self.min_lon = min_lon
-        #self.max_lon = max_lon
-        #self.min_lat = min_lat
-        #self.max_lat = max_lat
-        #self.padding = pading
+    
+    #---------------------------------------------------------------------------
+    # Sets up the displacement calculation and then passes it to the
+    # VCFieldProcessor class.
+    #---------------------------------------------------------------------------
+    def calculate_field_values(self, event_element_data, event_element_slips, cutoff=None):
+    
+        #-----------------------------------------------------------------------
+        # If the cutoff is none (ie not explicitly set) calculate the cutoff for
+        # this event.
+        #-----------------------------------------------------------------------
+        event_size = float(len(event_element_slips))
+        if cutoff is None:
+            if  event_size >= self.cutoff_min_size:
+                cutoff = vcutils.linear_interp(
+                    event_size,
+                    self.cutoff_min_size,
+                    self.cutoff_p2_size,
+                    self.cutoff_min,
+                    self.cutoff_p2
+                    )
+            else:
+                cutoff = self.cutoff_min
         
-        # These are constrained this way so we can plot on 1024x780 for the
-        # animations
-        max_map_width = 690.0
-        max_map_height = 658.0
+        #-----------------------------------------------------------------------
+        # Run the field calculation. The results are stored in self.results
+        #-----------------------------------------------------------------------
+        super(VCDisplacementField,self).calculate_field_values(event_element_data, event_element_slips, cutoff, type='displacement')
         
-        self.convert = quakelib.Conversion(base_lat, base_lon)
+        #-----------------------------------------------------------------------
+        # Combine the results
+        #-----------------------------------------------------------------------
+        self.dX = None
+        self.dY = None
+        self.dZ = None
+        for result in self.results:
+            if self.dX is None:
+                self.dX = result['dX']
+            else:
+                self.dX += result['dX']
+            
+            if self.dY is None:
+                self.dY = result['dY']
+            else:
+                self.dY += result['dY']
+                
+            if self.dZ is None:
+                self.dZ = result['dZ']
+            else:
+                self.dZ += result['dZ']
+
+class VCDisplacementFieldPlotter(object):
+    def __init__(self, min_lat, max_lat, min_lon, max_lon, map_res='i', map_proj='cyl'):
+        self.look_azimuth = None
+        self.look_elevation = None
+        self.wavelength = 0.03
         
         #-----------------------------------------------------------------------
         # DisplacementmMap configuration
@@ -195,25 +376,17 @@ class VCDisplacementMapPlotter(object):
             'cb_margin_t':          10.0
         }
         
-        lon_range = max_lon - min_lon
-        lat_range = max_lat - min_lat
-        max_range = max((lon_range, lat_range))
-        self.padded_min_lon = min_lon - lon_range*padding
-        self.padded_min_lat = min_lat - lat_range*padding
-        self.padded_max_lon = max_lon + lon_range*padding
-        self.padded_max_lat = max_lat + lat_range*padding
-        
         #-----------------------------------------------------------------------
         # m1, fig1 is the oceans and the continents. This will lie behind the
         # masked data image.
         #-----------------------------------------------------------------------
         self.m1 = Basemap(
-            llcrnrlon=self.padded_min_lon,
-            llcrnrlat=self.padded_min_lat,
-            urcrnrlon=self.padded_max_lon,
-            urcrnrlat=self.padded_max_lat,
-            lat_0=(self.padded_max_lat+self.padded_min_lat)/2.0,
-            lon_0=(self.padded_max_lon+self.padded_min_lon)/2.0,
+            llcrnrlon=min_lon,
+            llcrnrlat=min_lat,
+            urcrnrlon=max_lon,
+            urcrnrlat=max_lat,
+            lat_0=(max_lat+min_lat)/2.0,
+            lon_0=(max_lon+min_lon)/2.0,
             resolution=map_res,
             projection=map_proj,
             suppress_ticks=True
@@ -222,12 +395,12 @@ class VCDisplacementMapPlotter(object):
         # m2, fig2 is the plotted deformation data.
         #-----------------------------------------------------------------------
         self.m2 = Basemap(
-            llcrnrlon=self.padded_min_lon,
-            llcrnrlat=self.padded_min_lat,
-            urcrnrlon=self.padded_max_lon,
-            urcrnrlat=self.padded_max_lat,
-            lat_0=(self.padded_max_lat+self.padded_min_lat)/2.0,
-            lon_0=(self.padded_max_lon+self.padded_min_lon)/2.0,
+            llcrnrlon=min_lon,
+            llcrnrlat=min_lat,
+            urcrnrlon=max_lon,
+            urcrnrlat=max_lat,
+            lat_0=(max_lat+min_lat)/2.0,
+            lon_0=(max_lon+min_lon)/2.0,
             resolution=map_res,
             projection=map_proj,
             suppress_ticks=True
@@ -236,205 +409,32 @@ class VCDisplacementMapPlotter(object):
         # m3, fig3 is the ocean land mask.
         #-----------------------------------------------------------------------
         self.m3 = Basemap(
-            llcrnrlon=self.padded_min_lon,
-            llcrnrlat=self.padded_min_lat,
-            urcrnrlon=self.padded_max_lon,
-            urcrnrlat=self.padded_max_lat,
-            lat_0=(self.padded_max_lat+self.padded_min_lat)/2.0,
-            lon_0=(self.padded_max_lon+self.padded_min_lon)/2.0,
+            llcrnrlon=min_lon,
+            llcrnrlat=min_lat,
+            urcrnrlon=max_lon,
+            urcrnrlat=max_lat,
+            lat_0=(max_lat+min_lat)/2.0,
+            lon_0=(max_lon+min_lon)/2.0,
             resolution=map_res,
             projection=map_proj,
             suppress_ticks=True
         )
-        
-        #-----------------------------------------------------------------------
-        # Calculate the map grid
-        #-----------------------------------------------------------------------
-        # aspect is height/width
-        
-        if self.m1.aspect > 1.0:
-            map_height = max_map_height
-            map_width = max_map_height/self.m1.aspect
-        else:
-            map_width = max_map_width
-            map_height = max_map_width*self.m1.aspect
-        
-        #'''
-        self.lons_1d = np.linspace(self.padded_min_lon,self.padded_max_lon,int(map_width))
-        self.lats_1d = np.linspace(self.padded_min_lat,self.padded_max_lat,int(map_height))
-        
-        _lons_1d = quakelib.FloatList()
-        _lats_1d = quakelib.FloatList()
-        
-        for lon in self.lons_1d:
-            _lons_1d.append(lon)
-        
-        for lat in self.lats_1d:
-            _lats_1d.append(lat)
-        
-        self.field_1d = self.convert.convertArray2xyz(_lats_1d,_lons_1d)
-        #'''
-        #self.lats_1d,self.lons_1d,self.field_1d = cPickle.load(open('local/test_grid.pkl','rb'))
-        
-        self.fault_traces = {}
-        for secid in fault_traces.iterkeys():
-             self.fault_traces[secid] = zip(*[(lambda y: (y.lat(),y.lon()))(self.convert.convert2LatLon(quakelib.Vec3(x[0], x[1], x[2]))) for x in fault_traces[secid]])
-    
-    #---------------------------------------------------------------------------
-    # Sets up the displacement calculation and then passes it to the
-    # DisplacementGridProcessor class.
-    #---------------------------------------------------------------------------
-    def calculate_displacements(self, event_element_data, event_element_slips, cutoff=None):
-    
-        #-----------------------------------------------------------------------
-        # We need to calculate the event center and radius
-        #-----------------------------------------------------------------------
-        # create a element list
-        elements = quakelib.EventElementList()
-        
-        # create elements and add them to the element list
-        for element in event_element_data:
-            ele = quakelib.EventElement4()
-            ele.set_vert(0, element['m_x_pt1'], element['m_y_pt1'], element['m_z_pt1'])
-            ele.set_vert(1, element['m_x_pt2'], element['m_y_pt2'], element['m_z_pt2'])
-            ele.set_vert(2, element['m_x_pt3'], element['m_y_pt3'], element['m_z_pt3'])
-            ele.set_vert(3, element['m_x_pt4'], element['m_y_pt4'], element['m_z_pt4'])
-            elements.append(ele)
-        
-        # create an event
-        event = quakelib.Event()
-        
-        # add the elements to the event
-        event.add_elements(elements)
-        
-        # find the event radius and center
-        event_center = event.event_center()
-        event_radius = event.event_radius()
-        
-        #print event_center, event_radius
-        
-        #self.event_center = event_center
-        #self.event_radius = event_radius
-        
-        #-----------------------------------------------------------------------
-        # If the cutoff is none (ie not explicitly set) calculate the cutoff for
-        # this event.
-        #-----------------------------------------------------------------------
-        event_size = float(len(event_element_slips))
-        if cutoff is None:
-            if  event_size >= self.cutoff_min_size:
-                cutoff = vcutils.linear_interp(
-                    event_size,
-                    self.cutoff_min_size,
-                    self.cutoff_p2_size,
-                    self.cutoff_min,
-                    self.cutoff_p2
-                    )
-            else:
-                cutoff = self.cutoff_min
-        
-        print cutoff
-        #-----------------------------------------------------------------------
-        # Now break up the work and start the workers
-        #-----------------------------------------------------------------------
 
-        # How many seperate CPUs do we have
-        num_processes = multiprocessing.cpu_count()
-        
-        # Figure out how many segments we will break the task up into
-        seg = int(round(event_size/float(num_processes)))
-        if seg < 1:
-            seg = 1
-        
-        # Break up the job.
-        segmented_elements_indexes = []
-        for i in range(num_processes):
-            if i == num_processes - 1:
-                end_index = len(event_element_slips)
-            else:
-                end_index = seg*int(i + 1)
-            start_index = int(i) * seg
-            if start_index != end_index:
-                segmented_elements_indexes.append((start_index, end_index))
-        
-        # Add all of the jobs to a work queue
-        work_queue = multiprocessing.Queue()
-        for job in segmented_elements_indexes:
-            work_queue.put(job)
-        
-        # Create a queue to pass to workers to store the results
-        result_queue = multiprocessing.Queue()
-        
-        # Spawn workers
-        for i in range(len(segmented_elements_indexes)):
-            worker = DisplacementGridProcessor(work_queue,
-                result_queue,
-                self.field_1d,
-                event_element_data,
-                event_element_slips,
-                self.lats_1d.size,
-                self.lons_1d.size,
-                cutoff,
-                event_center,
-                event_radius
-            )
-            worker.start()
-        
-        # Collect the results off the queue
-        results = []
-        for i in range(len(segmented_elements_indexes)):
-            results.append(result_queue.get())
-        
-        # Combine the results
-        self.dX = None
-        self.dY = None
-        self.dZ = None
-        for result_num, result in enumerate(results):
-            if self.dX is None:
-                self.dX = result['dX']
-            else:
-                self.dX += result['dX']
-            
-            if self.dY is None:
-                self.dY = result['dY']
-            else:
-                self.dY += result['dY']
-                
-            if self.dZ is None:
-                self.dZ = result['dZ']
-            else:
-                self.dZ += result['dZ']
+    def set_field(self, field):
+        self.lons_1d = field.lons_1d
+        self.lats_1d = field.lats_1d
+        self.dX = field.dX
+        self.dY = field.dY
+        self.dZ = field.dZ
 
-    #---------------------------------------------------------------------------
-    # Calculates the look angles based on a set of elements. This will set the
-    # angles to be looking along the average strike of the fault.
-    #---------------------------------------------------------------------------
-    def calculate_look_angles(self, element_data):
-        strikes = []
-        rakes = []
-        
-        for element in element_data:
-            ele = quakelib.Element4()
-            ele.set_vert(0, element['m_x_pt1'], element['m_y_pt1'], element['m_z_pt1'])
-            ele.set_vert(1, element['m_x_pt2'], element['m_y_pt2'], element['m_z_pt2'])
-            ele.set_vert(2, element['m_x_pt3'], element['m_y_pt3'], element['m_z_pt3'])
-            ele.set_vert(3, element['m_x_pt4'], element['m_y_pt4'], element['m_z_pt4'])
-            strikes.append(ele.strike())
-            rakes.append(element['rake_rad'])
-        
-        self.look_azimuth = -sum(strikes)/len(strikes)
-        
-        average_rake = sum(rakes)/len(rakes)
-        if average_rake >= math.pi/2.0:
-            average_rake = math.pi - average_rake
-        self.look_elevation = abs(average_rake)
-    
+
     #---------------------------------------------------------------------------
     # Returns a PIL image of the masked displacement map using the current
     # values of the displacements. This map can then be combined into a still
     # or used as part of an animation.
     #---------------------------------------------------------------------------
-    def create_displacement_image(self, fringes=True):
+    def create_field_image(self, fringes=True):
+        
         #-----------------------------------------------------------------------
         # Set all of the plotting properties
         #-----------------------------------------------------------------------
@@ -475,7 +475,6 @@ class VCDisplacementMapPlotter(object):
             color=land_color,
             lake_color=water_color
         )
-        
         #-----------------------------------------------------------------------
         # Fig2 is the deformations.
         #-----------------------------------------------------------------------
@@ -490,10 +489,10 @@ class VCDisplacementMapPlotter(object):
         dMags = -self.dX * math.sin(self.look_azimuth) * math.cos(self.look_elevation) - self.dY * math.cos(self.look_azimuth) * math.cos(self.look_elevation) + self.dZ * math.sin(self.look_elevation)
         
         
-        #prepare the colors for the plot
+        # make sure the values are located at the correct location on the map
         dMags_transformed = self.m2.transform_scalar(dMags, self.lons_1d, self.lats_1d, self.lons_1d.size, self.lats_1d.size)
         
-        #print 'start colors'
+        # prepare the colors for the plot and do the plot
         if fringes:
             dMags_colors = np.empty((dMags_transformed.shape[0],dMags_transformed.shape[1],4))
             r,g,b,a = cmap(0)
@@ -509,22 +508,14 @@ class VCDisplacementMapPlotter(object):
                 dMags_colors[i, j, 1] = g
                 dMags_colors[i, j, 2] = b
                 dMags_colors[i, j, 3] = a
-            '''
-            it = np.nditer(dMags_transformed, flags=['multi_index'])
-            while not it.finished:
-                r,g,b,a = cmap(math.modf(abs(dMags_transformed[it.multi_index])/self.wavelength)[0])
-                dMags_colors[it.multi_index[0], it.multi_index[1], 0] = r
-                dMags_colors[it.multi_index[0], it.multi_index[1], 1] = g
-                dMags_colors[it.multi_index[0], it.multi_index[1], 2] = b
-                dMags_colors[it.multi_index[0], it.multi_index[1], 3] = a
-                it.iternext()
-            #cPickle.dump(dMags_colors, open('local/test_colors.pkl','wb'))
-            '''
-            #dMags_colors = cPickle.load(open('local/test_colors.pkl','rb'))
-            #print dMags_colors
+            self.norm = mcolor.Normalize(vmin=0, vmax=self.wavelength)
             im = self.m2.imshow(dMags_colors, interpolation='spline36')
         else:
-            dMags_colors = np.fabs(dMags_transformed)
+            dMags_colors = np.empty(dMags_transformed.shape)
+            non_zeros = dMags_transformed.nonzero()
+            #vmin = np.amin(np.fabs(dMags_transformed[non_zeros]))
+            dMags_colors.fill(5e-4)
+            dMags_colors[non_zeros] = np.fabs(dMags_transformed[non_zeros])
             vmax = np.amax(dMags_colors)
             if vmax <= 1:
                 mod_vmax = 1
@@ -536,9 +527,9 @@ class VCDisplacementMapPlotter(object):
                 mod_vmax = 1000
             elif vmax > 1000:
                 mod_vmax = 1000
-            im = self.m2.imshow(dMags_colors, cmap=cmap, norm=mcolor.LogNorm(vmin=1e-4, vmax=mod_vmax, clip=True))
-        #print 'end colors'
-
+            self.norm = mcolor.LogNorm(vmin=5e-4, vmax=mod_vmax, clip=True)
+            im = self.m2.imshow(dMags_colors, cmap=cmap, norm=self.norm)
+        
         #-----------------------------------------------------------------------
         # Fig3 is the land/sea mask.
         #-----------------------------------------------------------------------
@@ -590,12 +581,276 @@ class VCDisplacementMapPlotter(object):
         # The final composited image.
         return  Image.composite(im1, im2, mask)
 
+    #---------------------------------------------------------------------------
+    # Calculates the look angles based on a set of elements. This will set the
+    # angles to be looking along the average strike of the fault.
+    #---------------------------------------------------------------------------
+    def calculate_look_angles(self, element_data):
+        strikes = []
+        rakes = []
+        
+        for element in element_data:
+            ele = quakelib.Element4()
+            ele.set_vert(0, element['m_x_pt1'], element['m_y_pt1'], element['m_z_pt1'])
+            ele.set_vert(1, element['m_x_pt2'], element['m_y_pt2'], element['m_z_pt2'])
+            ele.set_vert(2, element['m_x_pt3'], element['m_y_pt3'], element['m_z_pt3'])
+            ele.set_vert(3, element['m_x_pt4'], element['m_y_pt4'], element['m_z_pt4'])
+            strikes.append(ele.strike())
+            rakes.append(element['rake_rad'])
+        
+        self.look_azimuth = -sum(strikes)/len(strikes)
+        
+        average_rake = sum(rakes)/len(rakes)
+        if average_rake >= math.pi/2.0:
+            average_rake = math.pi - average_rake
+        self.look_elevation = abs(average_rake)
+
+class VCGravityFieldPlotter(object):
+    def __init__(self, min_lat, max_lat, min_lon, max_lon, map_res='i', map_proj='cyl'):
+        #-----------------------------------------------------------------------
+        # Gravity map configuration
+        #-----------------------------------------------------------------------
+        self.dmc = {
+            'font':               mfont.FontProperties(family='Arial', style='normal', variant='normal', weight='normal'),
+            'font_bold':          mfont.FontProperties(family='Arial', style='normal', variant='normal', weight='bold'),
+            'cmap':               mplt.get_cmap('seismic'),
+        #water
+            'water_color':          '#4eacf4',
+        #map boundaries
+            'boundary_color':       '#000000',
+            'boundary_width':       1.0,
+            'coastline_color':      '#000000',
+            'coastline_width':      1.0,
+            'country_color':        '#000000',
+            'country_width':        1.0,
+            'state_color':          '#000000',
+            'state_width':          1.0,
+        #rivers
+            'river_width':          0.25,
+        #faults
+            'fault_color':          '#000000',
+            'event_fault_color':    '#ff0000',
+            'fault_width':          0.5,
+        #lat lon grid
+            'grid_color':           '#000000',
+            'grid_width':           0.0,
+            'num_grid_lines':       5,
+        #map props
+            'map_resolution':       map_res,
+            'map_projection':       map_proj,
+            'plot_resolution':      72.0,
+            'map_tick_color':       '#000000',
+            'map_frame_color':      '#000000',
+            'map_frame_width':      1,
+            'map_fontsize':         12,
+            'arrow_inset':          10.0,
+            'arrow_fontsize':       9.0,
+            'cb_fontsize':          10.0,
+            'cb_fontcolor':         '#000000',
+            'cb_height':            20.0,
+            'cb_margin_t':          10.0
+        }
+        
+        #-----------------------------------------------------------------------
+        # m1, fig1 is the oceans and the continents. This will lie behind the
+        # masked data image.
+        #-----------------------------------------------------------------------
+        self.m1 = Basemap(
+            llcrnrlon=min_lon,
+            llcrnrlat=min_lat,
+            urcrnrlon=max_lon,
+            urcrnrlat=max_lat,
+            lat_0=(max_lat+min_lat)/2.0,
+            lon_0=(max_lon+min_lon)/2.0,
+            resolution=map_res,
+            projection=map_proj,
+            suppress_ticks=True
+        )
+        #-----------------------------------------------------------------------
+        # m2, fig2 is the plotted deformation data.
+        #-----------------------------------------------------------------------
+        self.m2 = Basemap(
+            llcrnrlon=min_lon,
+            llcrnrlat=min_lat,
+            urcrnrlon=max_lon,
+            urcrnrlat=max_lat,
+            lat_0=(max_lat+min_lat)/2.0,
+            lon_0=(max_lon+min_lon)/2.0,
+            resolution=map_res,
+            projection=map_proj,
+            suppress_ticks=True
+        )
+        #-----------------------------------------------------------------------
+        # m3, fig3 is the ocean land mask.
+        #-----------------------------------------------------------------------
+        self.m3 = Basemap(
+            llcrnrlon=min_lon,
+            llcrnrlat=min_lat,
+            urcrnrlon=max_lon,
+            urcrnrlat=max_lat,
+            lat_0=(max_lat+min_lat)/2.0,
+            lon_0=(max_lon+min_lon)/2.0,
+            resolution=map_res,
+            projection=map_proj,
+            suppress_ticks=True
+        )
+
+    def set_field(self, field):
+        self.lons_1d = field.lons_1d
+        self.lats_1d = field.lats_1d
+        self.dG = field.dG
+
+    #---------------------------------------------------------------------------
+    # Returns a PIL image of the masked displacement map using the current
+    # values of the displacements. This map can then be combined into a still
+    # or used as part of an animation.
+    #---------------------------------------------------------------------------
+    def create_field_image(self, fringes=True):
+        
+        #-----------------------------------------------------------------------
+        # Set all of the plotting properties
+        #-----------------------------------------------------------------------
+    
+        cmap            = self.dmc['cmap']
+        water_color     = self.dmc['water_color']
+        boundary_color  = self.dmc['boundary_color']
+        land_color      = cmap(0.5)
+        plot_resolution = self.dmc['plot_resolution']
+        
+        #-----------------------------------------------------------------------
+        # Set the map dimensions
+        #-----------------------------------------------------------------------
+        mw = self.lons_1d.size
+        mh = self.lats_1d.size
+        mwi = mw/plot_resolution
+        mhi = mh/plot_resolution
+        
+        #-----------------------------------------------------------------------
+        # Fig1 is the background land and ocean.
+        #-----------------------------------------------------------------------
+        fig1 = mplt.figure(figsize=(mwi, mhi), dpi=plot_resolution)
+        self.m1.ax = fig1.add_axes((0,0,1,1))
+        self.m1.drawmapboundary(
+            color=boundary_color,
+            linewidth=0,
+            fill_color=water_color
+        )
+        self.m1.fillcontinents(
+            color=land_color,
+            lake_color=water_color
+        )
+        #-----------------------------------------------------------------------
+        # Fig2 is the deformations.
+        #-----------------------------------------------------------------------
+        fig2 = mplt.figure(figsize=(mwi, mhi), dpi=plot_resolution)
+        self.m2.ax = fig2.add_axes((0,0,1,1))
+        
+        # make sure the values are located at the correct location on the map
+        dG_transformed = self.m2.transform_scalar(self.dG, self.lons_1d, self.lats_1d, self.lons_1d.size, self.lats_1d.size)
+        
+        self.norm = mcolor.Normalize(vmin=np.amin(dG_transformed), vmax=np.amax(dG_transformed))
+        self.m2.imshow(dG_transformed, cmap=cmap, norm=self.norm)
+        
+        
+        #-----------------------------------------------------------------------
+        # Fig3 is the land/sea mask.
+        #-----------------------------------------------------------------------
+        fig3 = mplt.figure(figsize=(mwi, mhi), dpi=plot_resolution)
+        self.m3.ax = fig3.add_axes((0,0,1,1))
+        #self.m3.fillcontinents(color='#000000', lake_color='#ffffff')
+        dG_abs = np.fabs(dG_transformed)
+        print np.amin(dG_abs), np.amax(dG_abs), 1e6*np.amin(dG_abs), np.amax(dG_abs)*1e-1
+        im = self.m3.imshow(dG_abs, cmap=mplt.get_cmap('gray_r'), norm=mcolor.Normalize(vmin=1e6*np.amin(dG_abs), vmax=np.amax(dG_abs)*1e-1, clip=True))
+        
+        fig3.savefig('local/test_mask.png', format='png', dpi=plot_resolution)
+        
+        #-----------------------------------------------------------------------
+        # Composite fig 1 - 3 together
+        #-----------------------------------------------------------------------
+        # FIGURE 1 draw the renderer
+        fig1.canvas.draw()
+        
+        # FIGURE 1 Get the RGBA buffer from the figure
+        w,h = fig1.canvas.get_width_height()
+        buf = np.fromstring ( fig1.canvas.tostring_argb(), dtype=np.uint8 )
+        buf.shape = ( w, h,4 )
+     
+        # FIGURE 1 canvas.tostring_argb give pixmap in ARGB mode. Roll the ALPHA channel to have it in RGBA mode
+        buf = np.roll ( buf, 3, axis = 2 )
+        im1 = Image.fromstring( "RGBA", ( w ,h ), buf.tostring( ) )
+        
+        # FIGURE 2 draw the renderer
+        fig2.canvas.draw()
+        
+        # FIGURE 2 Get the RGBA buffer from the figure
+        w,h = fig2.canvas.get_width_height()
+        buf = np.fromstring ( fig2.canvas.tostring_argb(), dtype=np.uint8 )
+        buf.shape = ( w, h,4 )
+     
+        # FIGURE 2 canvas.tostring_argb give pixmap in ARGB mode. Roll the ALPHA channel to have it in RGBA mode
+        buf = np.roll ( buf, 3, axis = 2 )
+        im2 = Image.fromstring( "RGBA", ( w ,h ), buf.tostring( ) )
+        
+        # FIGURE 3 draw the renderer
+        fig3.canvas.draw()
+        
+        # FIGURE 3 Get the RGBA buffer from the figure
+        w,h = fig3.canvas.get_width_height()
+        buf = np.fromstring ( fig3.canvas.tostring_argb(), dtype=np.uint8 )
+        buf.shape = ( w, h,4 )
+     
+        # FIGURE 3 canvas.tostring_argb give pixmap in ARGB mode. Roll the ALPHA channel to have it in RGBA mode
+        buf = np.roll ( buf, 3, axis = 2 )
+        im3 = Image.fromstring( "RGBA", ( w ,h ), buf.tostring( ) )
+        
+        mask = im3.convert('L')
+        
+        #mask = Image.new("L", (w,h), 'black')
+        # The final composited image.
+        return  Image.composite(im1, im2, mask)
+
+#-------------------------------------------------------------------------------
+# event field animation
+#-------------------------------------------------------------------------------
+def event_field_animation(sim_file, output_directory, start_evnum, end_evnum, field_type='displacement', fringes=True, padding=0.01, cutoff=None):
+    # create the animation dir if needed
+    if not os.path.exists(output_directory):
+        os.makedirs(output_directory)
+    
+    if not output_directory.endswith('/'):
+        output_directory += '/'
+    
+    # create the animation subdirs if needed
+    field_values_directory = '{}field_values/'.format(output_directory)
+    frame_images_directory = '{}frame_images/'.format(output_directory)
+    if not os.path.exists(field_values_directory):
+        os.makedirs(field_values_directory)
+    if not os.path.exists(frame_images_directory):
+        os.makedirs(frame_images_directory)
+
+    EF = None
+    #---------------------------------------------------------------------------
+    # calculate the fields for each event if needed
+    #---------------------------------------------------------------------------
+    for evnum in range(start_evnum, end_evnum+1):
+        if field_type == 'displacement'
+            if not os.path.isfile('{}{}_dX.np'.format(field_values_directory, evnum)) or not os.path.isfile('{}{}_dY.np'.format(field_values_directory, evnum)) or not os.path.isfile('{}{}_dZ.np'.format(field_values_directory, evnum)):
+                # Calculate the displacements
+                if EF is None:
+                    pass
+        if field_type == 'gravity':
+            if not os.path.isfile('{}{}_dG.np'.format(field_values_directory, evnum)):
+                # Calculate the gravity changes
+                pass
+
+
+
 
 
 #-------------------------------------------------------------------------------
-# plots event displacements
+# plots event fields
 #-------------------------------------------------------------------------------
-def plot_event_displacements(sim_file, output_file, evnum, fringes=True, padding=0.01, cutoff=None):
+def plot_event_field(sim_file, output_file, evnum, field_type='displacement', fringes=True, padding=0.01, cutoff=None):
     start_time = time.time()
     with VCSimData() as sim_data:
         # open the simulation data file
@@ -626,25 +881,54 @@ def plot_event_displacements(sim_file, output_file, evnum, fringes=True, padding
     print 'Done initilizing data - {} seconds'.format(time.time() - start_time)
     print '{} elements in event'.format(len(event_element_slips))
     print '{} sections in event'.format(len(event_sections))
-    print event_sections
+    #print event_sections
     
     start_time = time.time()
-    dmp = VCDisplacementMapPlotter(min_lat, max_lat, min_lon, max_lon, base_lat, base_lon, fault_traces, padding=0.01)
-    print 'Done initilizing plotter - {} seconds'.format(time.time() - start_time)
+    if field_type == 'displacement':
+        EF = VCDisplacementField(min_lat, max_lat, min_lon, max_lon, base_lat, base_lon, padding=padding)
+    elif field_type == 'gravity':
+        EF = VCGravityField(min_lat, max_lat, min_lon, max_lon, base_lat, base_lon, padding=padding)
+    print 'Done initilizing field - {} seconds'.format(time.time() - start_time)
 
     start_time = time.time()
-    dmp.calculate_displacements(event_element_data, event_element_slips, cutoff=cutoff)
-    #dmp.dX, dmp.dY, dmp.dZ = cPickle.load(open('local/test_disp.pkl','rb'))
+    EF.calculate_field_values(event_element_data, event_element_slips, cutoff=cutoff)
+    if field_type == 'displacement':
+        np.save('local/dX.npy', EF.dX)
+        np.save('local/dY.npy', EF.dY)
+        np.save('local/dZ.npy', EF.dZ)
+        
+        #EF.dX = np.load('local/dX.npy')
+        #EF.dY = np.load('local/dY.npy')
+        #EF.dZ = np.load('local/dZ.npy')
+    elif field_type == 'gravity':
+        np.save('local/dG.npy', EF.dG)
+
+        #EF.dG = np.load('local/dG.npy')
+
     print 'Done calculating displacements - {} seconds'.format(time.time() - start_time)
-    cPickle.dump((dmp.dX, dmp.dY, dmp.dZ), open('local/test_disp.pkl','wb'))
+    
+    #cPickle.dump((df.dX, df.dY, df.dZ), open('local/test_disp.pkl','wb'))
+    start_time = time.time()
+    if field_type == 'displacement':
+        EFP = VCDisplacementFieldPlotter(EF.min_lat, EF.max_lat, EF.min_lon, EF.max_lon)
+    elif field_type == 'gravity':
+        EFP = VCGravityFieldPlotter(EF.min_lat, EF.max_lat, EF.min_lon, EF.max_lon)
+    EFP.set_field(EF)
+    print 'Done initilizing the plotter - {} seconds'.format(time.time() - start_time)
+
+    if field_type == 'displacement':
+        start_time = time.time()
+        EFP.calculate_look_angles(event_element_data)
+        print 'Done calculating look angles - {} seconds'.format(time.time() - start_time)
     
     start_time = time.time()
-    dmp.calculate_look_angles(event_element_data)
-    print 'Done calculating look angles - {} seconds'.format(time.time() - start_time)
-    
-    start_time = time.time()
-    map_image = dmp.create_displacement_image(fringes=fringes)
+    map_image = EFP.create_field_image(fringes=fringes)
     print 'Done creating the map image - {} seconds'.format(time.time() - start_time)
+    
+    
+    fault_traces_latlon = {}
+    for secid in fault_traces.iterkeys():
+         fault_traces_latlon[secid] = zip(*[(lambda y: (y.lat(),y.lon()))(EF.convert.convert2LatLon(quakelib.Vec3(x[0], x[1], x[2]))) for x in fault_traces[secid]])
     
     start_time = time.time()
     #---------------------------------------------------------------------------
@@ -653,57 +937,57 @@ def plot_event_displacements(sim_file, output_file, evnum, fringes=True, padding
     
     # Grab all of the plot properties that we will need.
     # properties that are fringes dependent
-    if fringes:
-        cmap            = dmp.dmc['cmap_f']
-        coastline_color = dmp.dmc['coastline_color_f']
-        country_color   = dmp.dmc['country_color_f']
-        state_color     = dmp.dmc['state_color_f']
-        fault_color     = dmp.dmc['fault_color_f']
-        map_tick_color  = dmp.dmc['map_tick_color_f']
-        map_frame_color = dmp.dmc['map_frame_color_f']
-        grid_color      = dmp.dmc['grid_color_f']
-        cb_fontcolor    = dmp.dmc['cb_fontcolor_f']
+    if fringes and field_type == 'displacement':
+        cmap            = EFP.dmc['cmap_f']
+        coastline_color = EFP.dmc['coastline_color_f']
+        country_color   = EFP.dmc['country_color_f']
+        state_color     = EFP.dmc['state_color_f']
+        fault_color     = EFP.dmc['fault_color_f']
+        map_tick_color  = EFP.dmc['map_tick_color_f']
+        map_frame_color = EFP.dmc['map_frame_color_f']
+        grid_color      = EFP.dmc['grid_color_f']
+        cb_fontcolor    = EFP.dmc['cb_fontcolor_f']
     else:
-        cmap            = dmp.dmc['cmap']
-        coastline_color = dmp.dmc['coastline_color']
-        country_color   = dmp.dmc['country_color']
-        state_color     = dmp.dmc['state_color']
-        fault_color     = dmp.dmc['fault_color']
-        map_tick_color  = dmp.dmc['map_tick_color']
-        map_frame_color = dmp.dmc['map_frame_color']
-        grid_color      = dmp.dmc['grid_color']
-        cb_fontcolor    = dmp.dmc['cb_fontcolor']
+        cmap            = EFP.dmc['cmap']
+        coastline_color = EFP.dmc['coastline_color']
+        country_color   = EFP.dmc['country_color']
+        state_color     = EFP.dmc['state_color']
+        fault_color     = EFP.dmc['fault_color']
+        map_tick_color  = EFP.dmc['map_tick_color']
+        map_frame_color = EFP.dmc['map_frame_color']
+        grid_color      = EFP.dmc['grid_color']
+        cb_fontcolor    = EFP.dmc['cb_fontcolor']
     
     # properties that are not fringes dependent
-    boundary_width  = dmp.dmc['boundary_width']
-    coastline_width = dmp.dmc['coastline_width']
-    country_width   = dmp.dmc['country_width']
-    state_width     = dmp.dmc['state_width']
-    river_width     = dmp.dmc['river_width']
-    fault_width     = dmp.dmc['fault_width']
-    map_resolution  = dmp.dmc['map_resolution']
-    plot_resolution = dmp.dmc['plot_resolution']
-    map_frame_width = dmp.dmc['map_frame_width']
-    map_fontsize    = dmp.dmc['map_fontsize']
-    arrow_inset     = dmp.dmc['arrow_inset']
-    arrow_fontsize  = dmp.dmc['arrow_fontsize']
-    cb_fontsize     = dmp.dmc['cb_fontsize']
-    cb_height       = dmp.dmc['cb_height']
-    cb_margin_t     = dmp.dmc['cb_margin_t']
-    grid_width      = dmp.dmc['grid_width']
-    num_grid_lines  = dmp.dmc['num_grid_lines']
-    font            = dmp.dmc['font']
-    font_bold       = dmp.dmc['font_bold']
-    map_resolution  = dmp.dmc['map_resolution']
-    map_projection  = dmp.dmc['map_projection']
+    boundary_width  = EFP.dmc['boundary_width']
+    coastline_width = EFP.dmc['coastline_width']
+    country_width   = EFP.dmc['country_width']
+    state_width     = EFP.dmc['state_width']
+    river_width     = EFP.dmc['river_width']
+    fault_width     = EFP.dmc['fault_width']
+    map_resolution  = EFP.dmc['map_resolution']
+    plot_resolution = EFP.dmc['plot_resolution']
+    map_frame_width = EFP.dmc['map_frame_width']
+    map_fontsize    = EFP.dmc['map_fontsize']
+    arrow_inset     = EFP.dmc['arrow_inset']
+    arrow_fontsize  = EFP.dmc['arrow_fontsize']
+    cb_fontsize     = EFP.dmc['cb_fontsize']
+    cb_height       = EFP.dmc['cb_height']
+    cb_margin_t     = EFP.dmc['cb_margin_t']
+    grid_width      = EFP.dmc['grid_width']
+    num_grid_lines  = EFP.dmc['num_grid_lines']
+    font            = EFP.dmc['font']
+    font_bold       = EFP.dmc['font_bold']
+    map_resolution  = EFP.dmc['map_resolution']
+    map_projection  = EFP.dmc['map_projection']
     
     # The sizing for the image is tricky. The aspect ratio of the plot is fixed,
     # so we cant set all of margins to whatever we want. We will set the anchor
     # to the top, left margin position. Then scale the image based on the
     # bottom/right margin, whichever is bigger.
     
-    mw = dmp.lons_1d.size
-    mh = dmp.lats_1d.size
+    mw = EF.lons_1d.size
+    mh = EF.lats_1d.size
     
     if mh > mw:
         ph = 768.0
@@ -725,12 +1009,12 @@ def plot_event_displacements(sim_file, output_file, evnum, fringes=True, padding
     # m4, fig4 is all of the boundary data.
     #---------------------------------------------------------------------------
     m4 = Basemap(
-        llcrnrlon=dmp.padded_min_lon,
-        llcrnrlat=dmp.padded_min_lat,
-        urcrnrlon=dmp.padded_max_lon,
-        urcrnrlat=dmp.padded_max_lat,
-        lat_0=(dmp.padded_max_lat+dmp.padded_min_lat)/2.0,
-        lon_0=(dmp.padded_max_lon+dmp.padded_min_lon)/2.0,
+        llcrnrlon=EF.min_lon,
+        llcrnrlat=EF.min_lat,
+        urcrnrlon=EF.max_lon,
+        urcrnrlat=EF.max_lat,
+        lat_0=(EF.max_lat+EF.min_lat)/2.0,
+        lon_0=(EF.max_lon+EF.min_lon)/2.0,
         resolution=map_resolution,
         projection=map_projection,
         suppress_ticks=True
@@ -747,76 +1031,77 @@ def plot_event_displacements(sim_file, output_file, evnum, fringes=True, padding
     m4.drawstates(linewidth=state_width, color=state_color)
     
     # draw parallels.
-    parallels = np.linspace(dmp.lats_1d.min(), dmp.lats_1d.max(), num_grid_lines+1)
+    parallels = np.linspace(EFP.lats_1d.min(), EFP.lats_1d.max(), num_grid_lines+1)
     m4_parallels = m4.drawparallels(parallels, labels=[1,0,0,0], fontsize=map_fontsize, color=grid_color, fontproperties=font, fmt='%.2f', linewidth=grid_width, dashes=[1, 10])
     
     # draw meridians
-    meridians = np.linspace(dmp.lons_1d.min(), dmp.lons_1d.max(), num_grid_lines+1)
+    meridians = np.linspace(EFP.lons_1d.min(), EFP.lons_1d.max(), num_grid_lines+1)
     m4_meridians = m4.drawmeridians(meridians, labels=[0,0,1,0], fontsize=map_fontsize, color=grid_color, fontproperties=font, fmt='%.2f', linewidth=grid_width, dashes=[1, 10])
-    
-    # draw the azimuth look arrow
-    az_width_frac    = 50.0/pw
-    az_height_frac   = 50.0/ph
-    az_left_frac     = (70.0 + mw - arrow_inset - pw*az_width_frac)/pw
-    az_bottom_frac   = (70.0 + mh - arrow_inset - ph*az_height_frac)/ph
-    az_ax = fig4.add_axes((az_left_frac,az_bottom_frac,az_width_frac,az_height_frac))
 
-    az_ax.set_xlim((0,1.0))
-    az_ax.set_ylim((0,1.0))
-    for item in az_ax.yaxis.get_ticklabels() + az_ax.xaxis.get_ticklabels() + az_ax.yaxis.get_ticklines() + az_ax.xaxis.get_ticklines():
-        item.set_alpha(0)
+    if field_type == 'displacement':
+        # draw the azimuth look arrow
+        az_width_frac    = 50.0/pw
+        az_height_frac   = 50.0/ph
+        az_left_frac     = (70.0 + mw - arrow_inset - pw*az_width_frac)/pw
+        az_bottom_frac   = (70.0 + mh - arrow_inset - ph*az_height_frac)/ph
+        az_ax = fig4.add_axes((az_left_frac,az_bottom_frac,az_width_frac,az_height_frac))
 
-    az_arrow_start_x    = 0.5 - (0.8/2.0)*math.sin(dmp.look_azimuth)
-    az_arrow_start_y    = 0.5 - (0.8/2.0)*math.cos(dmp.look_azimuth)
-    az_arrow_dx      = 0.8*math.sin(dmp.look_azimuth)
-    az_arrow_dy      = 0.8*math.cos(dmp.look_azimuth)
+        az_ax.set_xlim((0,1.0))
+        az_ax.set_ylim((0,1.0))
+        for item in az_ax.yaxis.get_ticklabels() + az_ax.xaxis.get_ticklabels() + az_ax.yaxis.get_ticklines() + az_ax.xaxis.get_ticklines():
+            item.set_alpha(0)
 
-    az_ax.arrow( az_arrow_start_x , az_arrow_start_y, az_arrow_dx, az_arrow_dy, head_width=0.1, head_length= 0.1, overhang=0.1, shape='right', length_includes_head=True, lw=1.0, fc='k' )
-    az_ax.add_line(mlines.Line2D((0.5,0.5), (0.5,0.8), lw=1.0, ls=':', c='k', dashes=(2.0,1.0)))
-    az_ax.add_patch(mpatches.Arc((0.5,0.5), 0.3, 0.3, theta1=90.0 - dmp.convert.rad2deg(dmp.look_azimuth), theta2=90.0, fc='none', lw=1.0, ls='dotted', ec='k'))
-    az_ax.text(1.0, 1.0, 'az = {:0.1f}{}'.format(dmp.convert.rad2deg(dmp.look_azimuth),r'$^{\circ}$'), fontproperties=font_bold, size=arrow_fontsize, ha='right', va='top')
+        az_arrow_start_x    = 0.5 - (0.8/2.0)*math.sin(EFP.look_azimuth)
+        az_arrow_start_y    = 0.5 - (0.8/2.0)*math.cos(EFP.look_azimuth)
+        az_arrow_dx      = 0.8*math.sin(EFP.look_azimuth)
+        az_arrow_dy      = 0.8*math.cos(EFP.look_azimuth)
 
-    # draw the altitude look arrow
-    al_width_frac    = 50.0/pw
-    al_height_frac   = 50.0/ph
-    al_left_frac     = (70.0 + mw - arrow_inset - pw*az_width_frac)/pw
-    al_bottom_frac   = (70.0 + mh - arrow_inset - ph*az_height_frac - ph*al_height_frac)/ph
-    al_ax = fig4.add_axes((al_left_frac,al_bottom_frac,al_width_frac,al_height_frac))
+        az_ax.arrow( az_arrow_start_x , az_arrow_start_y, az_arrow_dx, az_arrow_dy, head_width=0.1, head_length= 0.1, overhang=0.1, shape='right', length_includes_head=True, lw=1.0, fc='k' )
+        az_ax.add_line(mlines.Line2D((0.5,0.5), (0.5,0.8), lw=1.0, ls=':', c='k', dashes=(2.0,1.0)))
+        az_ax.add_patch(mpatches.Arc((0.5,0.5), 0.3, 0.3, theta1=90.0 - EF.convert.rad2deg(EFP.look_azimuth), theta2=90.0, fc='none', lw=1.0, ls='dotted', ec='k'))
+        az_ax.text(1.0, 1.0, 'az = {:0.1f}{}'.format(EF.convert.rad2deg(EFP.look_azimuth),r'$^{\circ}$'), fontproperties=font_bold, size=arrow_fontsize, ha='right', va='top')
 
-    al_ax.set_xlim((0,1.0))
-    al_ax.set_ylim((0,1.0))
-    for item in al_ax.yaxis.get_ticklabels() + al_ax.xaxis.get_ticklabels() + al_ax.yaxis.get_ticklines() + al_ax.xaxis.get_ticklines():
-        item.set_alpha(0)
+        # draw the altitude look arrow
+        al_width_frac    = 50.0/pw
+        al_height_frac   = 50.0/ph
+        al_left_frac     = (70.0 + mw - arrow_inset - pw*az_width_frac)/pw
+        al_bottom_frac   = (70.0 + mh - arrow_inset - ph*az_height_frac - ph*al_height_frac)/ph
+        al_ax = fig4.add_axes((al_left_frac,al_bottom_frac,al_width_frac,al_height_frac))
 
-    al_arrow_start_x    = 0.1 + 0.8*math.cos(dmp.look_elevation)
-    al_arrow_start_y    = 0.1 + 0.8*math.sin(dmp.look_elevation)
-    al_arrow_dx      = -0.8*math.cos(dmp.look_elevation)
-    al_arrow_dy      = -0.8*math.sin(dmp.look_elevation)
+        al_ax.set_xlim((0,1.0))
+        al_ax.set_ylim((0,1.0))
+        for item in al_ax.yaxis.get_ticklabels() + al_ax.xaxis.get_ticklabels() + al_ax.yaxis.get_ticklines() + al_ax.xaxis.get_ticklines():
+            item.set_alpha(0)
 
-    al_ax.arrow( al_arrow_start_x , al_arrow_start_y, al_arrow_dx, al_arrow_dy, head_width=0.1, head_length= 0.1, overhang=0.1, shape='left', length_includes_head=True, lw=1.0, fc='k' )
-    al_ax.add_line(mlines.Line2D((0.1,0.9), (0.1,0.1), lw=1.0, ls=':', c='k', dashes=(2.0,1.0)))
-    al_ax.add_patch(mpatches.Arc((0.1,0.1), 0.5, 0.5, theta1=0.0, theta2=dmp.convert.rad2deg(dmp.look_elevation), fc='none', lw=1.0, ls='dotted', ec='k'))
-    al_ax.text(1.0, 1.0, 'al = {:0.1f}{}'.format(dmp.convert.rad2deg(dmp.look_elevation),r'$^{\circ}$'), fontproperties=font_bold, size=arrow_fontsize, ha='right', va='top')
-    
-    # draw the box with the magnitude
-    mag_width_frac    = 50.0/pw
-    mag_height_frac   = 10.0/ph
-    mag_left_frac     = (70.0 + mw - arrow_inset - pw*az_width_frac)/pw
-    mag_bottom_frac   = (70.0 + mh - arrow_inset - ph*az_height_frac  - ph*az_height_frac - ph*mag_height_frac)/ph
-    mag_ax = fig4.add_axes((mag_left_frac,mag_bottom_frac,mag_width_frac,mag_height_frac))
+        al_arrow_start_x    = 0.1 + 0.8*math.cos(EFP.look_elevation)
+        al_arrow_start_y    = 0.1 + 0.8*math.sin(EFP.look_elevation)
+        al_arrow_dx      = -0.8*math.cos(EFP.look_elevation)
+        al_arrow_dy      = -0.8*math.sin(EFP.look_elevation)
 
-    mag_ax.set_xlim((0,1.0))
-    mag_ax.set_ylim((0,1.0))
-    for item in mag_ax.yaxis.get_ticklabels() + mag_ax.xaxis.get_ticklabels() + mag_ax.yaxis.get_ticklines() + mag_ax.xaxis.get_ticklines():
-        item.set_alpha(0)
-    
-    mag_ax.text(0.5, 0.5, 'm = {:0.3f}'.format(float(event_data['event_magnitude'])), fontproperties=font_bold, size=arrow_fontsize, ha='center', va='center')
+        al_ax.arrow( al_arrow_start_x , al_arrow_start_y, al_arrow_dx, al_arrow_dy, head_width=0.1, head_length= 0.1, overhang=0.1, shape='left', length_includes_head=True, lw=1.0, fc='k' )
+        al_ax.add_line(mlines.Line2D((0.1,0.9), (0.1,0.1), lw=1.0, ls=':', c='k', dashes=(2.0,1.0)))
+        al_ax.add_patch(mpatches.Arc((0.1,0.1), 0.5, 0.5, theta1=0.0, theta2=EF.convert.rad2deg(EFP.look_elevation), fc='none', lw=1.0, ls='dotted', ec='k'))
+        al_ax.text(1.0, 1.0, 'al = {:0.1f}{}'.format(EF.convert.rad2deg(EFP.look_elevation),r'$^{\circ}$'), fontproperties=font_bold, size=arrow_fontsize, ha='right', va='top')
+        
+        # draw the box with the magnitude
+        mag_width_frac    = 50.0/pw
+        mag_height_frac   = 10.0/ph
+        mag_left_frac     = (70.0 + mw - arrow_inset - pw*az_width_frac)/pw
+        mag_bottom_frac   = (70.0 + mh - arrow_inset - ph*az_height_frac  - ph*az_height_frac - ph*mag_height_frac)/ph
+        mag_ax = fig4.add_axes((mag_left_frac,mag_bottom_frac,mag_width_frac,mag_height_frac))
+
+        mag_ax.set_xlim((0,1.0))
+        mag_ax.set_ylim((0,1.0))
+        for item in mag_ax.yaxis.get_ticklabels() + mag_ax.xaxis.get_ticklabels() + mag_ax.yaxis.get_ticklines() + mag_ax.xaxis.get_ticklines():
+            item.set_alpha(0)
+        
+        mag_ax.text(0.5, 0.5, 'm = {:0.3f}'.format(float(event_data['event_magnitude'])), fontproperties=font_bold, size=arrow_fontsize, ha='center', va='center')
 
     # add the displacement map image to the plot
     m4.imshow(map_image, origin='upper')
     
     # print faults on lon-lat plot
-    for sid, sec_trace in dmp.fault_traces.iteritems():
+    for sid, sec_trace in fault_traces_latlon.iteritems():
         trace_Xs, trace_Ys = m4(sec_trace[1], sec_trace[0])
         
         if sid in event_sections:
@@ -834,13 +1119,13 @@ def plot_event_displacements(sim_file, output_file, evnum, fringes=True, padding
 
     cb_ax = fig4.add_axes([cb_left_frac, cb_bottom_frac, cb_width_frac, cb_height_frac])
     if fringes:
-        norm = mcolor.Normalize(vmin=0, vmax=dmp.wavelength)
+        norm = EFP.norm
         cb = mcolorbar.ColorbarBase(cb_ax, cmap=cmap,
                    norm=norm,
                    orientation='horizontal')
         cb_ax.set_title('Displacement [m]', fontproperties=font, color=cb_fontcolor, size=cb_fontsize, va='top', ha='left', position=(0,-1.5) )
     else:
-        norm = mcolor.LogNorm(vmin=1e-4, vmax=mod_vmax, clip=True)
+        norm = EFP.norm
         cb = mcolorbar.ColorbarBase(cb_ax, cmap=cmap,
                    norm=norm,
                    orientation='horizontal')
