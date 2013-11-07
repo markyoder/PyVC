@@ -198,7 +198,12 @@ class VCField(object):
         
         # Break up the job.
         segmented_elements_indexes = []
-        for i in range(num_processes):
+        if event_size < num_processes:
+            segments = event_size
+        else:
+            segments = num_processes
+        
+        for i in range(segments):
             if i == num_processes - 1:
                 end_index = len(event_element_slips)
             else:
