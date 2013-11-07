@@ -955,6 +955,10 @@ class VCGravityFieldPlotter(object):
 def event_field_animation(sim_file, output_directory, event_range,
     field_type='displacement', fringes=True, padding=0.01, cutoff=None,
     animation_target_length=60.0, animation_fps = 30.0, fade_seconds = 1.0, min_mag_marker = 6.5, force_plot=False):
+    
+    sys.stdout.write('Initializing animation :: ')
+    sys.stdout.flush()
+    
     # create the animation dir if needed
     if not os.path.exists(output_directory):
         os.makedirs(output_directory)
@@ -1137,11 +1141,15 @@ def event_field_animation(sim_file, output_directory, event_range,
         section_states = {}
         large_event_label_states = {}
         fm_alpha_state = 0.0
-
+        
+        sys.stdout.write('done\n')
+        sys.stdout.flush()
+        
         #-----------------------------------------------------------------------
         # Go through all of the frames.
         #-----------------------------------------------------------------------
-        print 'total frames:{}, frames per year:{}'.format(total_frames, fpy)
+        sys.stdout.write('Total frames : {}, Frames per year : {}\n'.format(total_frames, fpy))
+        sys.stdout.flush()
         for the_frame in range(total_frames):
             year_frame = the_frame%fpy
             if year_frame == 0:
@@ -1172,8 +1180,8 @@ def event_field_animation(sim_file, output_directory, event_range,
             # Load or calculate all of the data for the current frame.
             #-------------------------------------------------------------------
             if len(evnums_this_frame) > 0:
-                for evnum in evnums_this_frame:
-                    sys.stdout.write('\r event {} '.format(evnum))
+                for i, evnum in enumerate(evnums_this_frame):
+                    sys.stdout.write('\r Event {} :: '.format(evnum))
                     # Try and load the fields
                     field_values_loaded = EF.load_field_values('{}{}_'.format(field_values_directory, evnum))
                     if field_values_loaded:
@@ -1194,7 +1202,8 @@ def event_field_animation(sim_file, output_directory, event_range,
                         
                         EF.calculate_field_values(event_element_data, event_element_slips, cutoff=cutoff, save_file_prefix='{}{}_'.format(field_values_directory, evnum))
                         
-                        sys.stdout.write('\033[2K')
+                        if i < len(evnums_this_frame) - 1:
+                            sys.stdout.write('\033[2K')
                         sys.stdout.flush()
 
             sys.stdout.write('\n')
@@ -1216,7 +1225,7 @@ def event_field_animation(sim_file, output_directory, event_range,
             # If the image has not been plotted, plot it.
             #-------------------------------------------------------------------
             if not os.path.isfile('{}{}.png'.format(frame_images_directory, the_frame)) or force_plot:
-                sys.stdout.write('\r plotting :: ')
+                sys.stdout.write('\r Plotting :: ')
                 
                 # Set the plot field to be the current field
                 EFP.set_field(EF)
@@ -1568,7 +1577,8 @@ def event_field_animation(sim_file, output_directory, event_range,
             if fm_alpha_state > 1.0:
                 fm_alpha_state = 1.0
 
-            sys.stdout.write('\033[2A\r')
+            sys.stdout.write('\033[2A')
+            sys.stdout.write('\033[2K')
 
 
         proc_args = 'ffmpeg -y -r {fps} -f image2 -i {dir}{inc}.png {out}animation.mp4'.format(
