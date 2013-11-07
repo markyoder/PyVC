@@ -1202,7 +1202,7 @@ def event_field_animation(sim_file, output_directory, event_range,
                         
                         EF.calculate_field_values(event_element_data, event_element_slips, cutoff=cutoff, save_file_prefix='{}{}_'.format(field_values_directory, evnum))
                         
-                        if i < len(evnums_this_frame) - 1:
+                        if i < len(evnums_this_frame)-1 :
                             sys.stdout.write('\033[2K')
                         sys.stdout.flush()
 
@@ -1577,7 +1577,9 @@ def event_field_animation(sim_file, output_directory, event_range,
             if fm_alpha_state > 1.0:
                 fm_alpha_state = 1.0
 
-            sys.stdout.write('\033[2A\r')
+            sys.stdout.write('\033[1A')
+            sys.stdout.write('\033[2K')
+            sys.stdout.write('\033[1A\r')
             sys.stdout.write('\033[2K')
 
 
