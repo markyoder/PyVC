@@ -1577,7 +1577,7 @@ def event_field_animation(sim_file, output_directory, event_range,
             if fm_alpha_state > 1.0:
                 fm_alpha_state = 1.0
 
-            sys.stdout.write('\033[2A')
+            sys.stdout.write('\033[2A\r')
             sys.stdout.write('\033[2K')
 
 
