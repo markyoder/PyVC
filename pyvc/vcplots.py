@@ -330,7 +330,7 @@ class VCGravityField(VCField):
             self.init_field(0.0)
         
         try:
-            dG += np.load('{}dG.npy'.format(file_prefix))
+            dG = np.load('{}dG.npy'.format(file_prefix))
             
             min = np.min(np.fabs(dG[dG.nonzero()]))
             if min < self.dG_min:
