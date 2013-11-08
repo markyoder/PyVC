@@ -115,7 +115,10 @@ class VCFieldProcessor(multiprocessing.Process):
                 self.result_queue.put(processed_displacements)
             elif self.type == 'gravity':
                 # calculate the gravity changes
-                dGrav_1d = event.event_gravity_changes(self.field_1d, lame_lambda, lame_lambda)
+                if self.cutoff is None:
+                    dGrav_1d = event.event_gravity_changes(self.field_1d, lame_lambda, lame_lambda)
+                else:
+                    dGrav_1d = event.event_gravity_changes(self.field_1d, lame_lambda, lame_lambda, self.cutoff)
                 dGrav = np.array(dGrav_1d).reshape((self.lat_size,self.lon_size))
                 
                 # store the result
@@ -250,8 +253,15 @@ class VCGravityField(VCField):
     def __init__(self, min_lat, max_lat, min_lon, max_lon, base_lat, base_lon, padding=0.01, map_res='i', map_proj='cyl'):
         
         super(VCGravityField,self).__init__(min_lat, max_lat, min_lon, max_lon, base_lat, base_lon, padding, map_res, map_proj)
-    
+        
+        # Define how the cutoff value scales if it is not explitly set
+        self.cutoff_min_size = 20.0
+        self.cutoff_min = 20.0
+        self.cutoff_p2_size = 65.0
+        self.cutoff_p2 = 90.0
+        
         self.dG = None
+        self.dG_min = sys.float_info.max
 
     #---------------------------------------------------------------------------
     # Sets up the gravity change calculation and then passes it to the
@@ -259,6 +269,25 @@ class VCGravityField(VCField):
     #---------------------------------------------------------------------------
     def calculate_field_values(self, event_element_data, event_element_slips, cutoff=None, save_file_prefix=None):
         
+        #-----------------------------------------------------------------------
+        # If the cutoff is none (ie not explicitly set) calculate the cutoff for
+        # this event.
+        #-----------------------------------------------------------------------
+        event_size = float(len(event_element_slips))
+        if cutoff is None:
+            if  event_size >= self.cutoff_min_size:
+                cutoff = vcutils.linear_interp(
+                    event_size,
+                    self.cutoff_min_size,
+                    self.cutoff_p2_size,
+                    self.cutoff_min,
+                    self.cutoff_p2
+                    )
+            else:
+                cutoff = self.cutoff_min
+    
+        sys.stdout.write('{:0.2f} cutoff : '.format(cutoff))
+        sys.stdout.flush()
         #-----------------------------------------------------------------------
         # Run the field calculation. The results are stored in self.results
         #-----------------------------------------------------------------------
@@ -268,11 +297,14 @@ class VCGravityField(VCField):
         # Combine the results
         #-----------------------------------------------------------------------
         for result in self.results:
+            min = np.min(np.fabs(result[result.nonzero()]))
+            if min < self.dG_min:
+                self.dG_min = min
             if self.dG is None:
                 self.dG = result
             else:
                 self.dG += result
-    
+        
         #-----------------------------------------------------------------------
         # If the save file is set then we need to combine the results to be
         # saved. This is done seperately from above because self.dG is a
@@ -303,13 +335,19 @@ class VCGravityField(VCField):
             return True
         except IOError:
             return False
-
+    
+    def shrink_field(self, percentage):
+        self.dG *= percentage
+        zeros = np.zeros(self.dG.shape)
+        self.dG = np.where(self.dG >= self.dG_min, self.dG, zeros)
+    '''
     def __imul__(self, value):
         if self.dG is None:
             self.init_field(0.0)
         self.dG *= value
 
         return self
+    '''
 
 #-------------------------------------------------------------------------------
 # A class to handle calculating event displacements
@@ -328,6 +366,10 @@ class VCDisplacementField(VCField):
         self.dX = None
         self.dY = None
         self.dZ = None
+    
+        self.dX_min = sys.float_info.max
+        self.dY_min = sys.float_info.max
+        self.dZ_min = sys.float_info.max
     
     #---------------------------------------------------------------------------
     # Sets up the displacement calculation and then passes it to the
@@ -361,6 +403,16 @@ class VCDisplacementField(VCField):
         # Combine the results
         #-----------------------------------------------------------------------
         for result in self.results:
+            min_x = np.min(np.fabs(result['dX'][result['dX'].nonzero()]))
+            if min_x < self.dX_min:
+                self.dX_min = min_x
+            min_y = np.min(np.fabs(result['dY'][result['dY'].nonzero()]))
+            if min_y < self.dY_min:
+                self.dY_min = min_y
+            min_z = np.min(np.fabs(result['dZ'][result['dZ'].nonzero()]))
+            if min_z < self.dZ_min:
+                self.dZ_min = min_z
+            
             if self.dX is None:
                 self.dX = result['dX']
             else:
@@ -429,6 +481,20 @@ class VCDisplacementField(VCField):
         except IOError:
             return False
     
+    def shrink_field(self, percentage):
+        if self.dX is None or self.dY is None or self.dZ is None:
+            self.init_field(0.0)
+        
+        self.dX *= value
+        self.dY *= value
+        self.dZ *= value
+        
+        zeros = np.zeros(self.dX.shape)
+        self.dX = np.where(self.dX >= self.dX_min, self.dX, zeros)
+        self.dY = np.where(self.dY >= self.dY_min, self.dY, zeros)
+        self.dZ = np.where(self.dZ >= self.dZ_min, self.dZ, zeros)
+    
+    '''
     def __imul__(self, value):
         if self.dX is None or self.dY is None or self.dZ is None:
             self.init_field(0.0)
@@ -437,6 +503,7 @@ class VCDisplacementField(VCField):
         self.dZ *= value
 
         return self
+    '''
 
 
 class VCDisplacementFieldPlotter(object):
@@ -1173,9 +1240,9 @@ def event_field_animation(sim_file, output_directory, event_range,
 
             sys.stdout.write('frame {} (year {}) of {} ({})\n'.format(the_frame, progress_indicator_year, total_frames, total_years))
 
-            # Remove a fixed amount from the field. This is the decay
+            # Remove a fixed percentage from the field. This is the decay
             # that slowly fades existing field values.
-            EF *= 1.0 - 1.0/(animation_fps*fade_seconds)
+            EF.shrink_field(1.0/(animation_fps*fade_seconds))
             
             #-------------------------------------------------------------------
             # Load or calculate all of the data for the current frame.
@@ -1614,9 +1681,9 @@ def event_field_animation(sim_file, output_directory, event_range,
         # Create the movie using ffmpeg.
         #-----------------------------------------------------------------------
         
-        #proc_args = "ffmpeg -y -r 30 -sameq -i %s_images/%s_%s.png %s.mp4"%(sys_name,sys_name,"%d",sys_name)
+        #ffmpeg -y -r 15 -i f_%d.png -f mp4 -vcodec h264 -pix_fmt yuv420p animation.mp4
         
-        proc_args = 'ffmpeg -y -r {fps} -sameq -i {dir}{inc}.png {out}animation.mp4'.format(
+        proc_args = 'ffmpeg -y -r {fps} -i {dir}{inc}.png -f mp4 -vcodec h264 -pix_fmt yuv420p {out}animation.mp4'.format(
             fps=int(animation_fps),
             dir=frame_images_directory,
             inc='%d',
@@ -1630,6 +1697,10 @@ def event_field_animation(sim_file, output_directory, event_range,
 # plots event fields
 #-------------------------------------------------------------------------------
 def plot_event_field(sim_file, output_file, evnum, field_type='displacement', fringes=True, padding=0.01, cutoff=None):
+    
+    sys.stdout.write('Initializing plot :: ')
+    sys.stdout.flush()
+    
     start_time = time.time()
     with VCSimData() as sim_data:
         # open the simulation data file
@@ -1655,61 +1726,65 @@ def plot_event_field(sim_file, output_file, evnum, field_type='displacement', fr
             event_element_data = [event_element_data]
         fault_traces = geometry.get_fault_traces()
         event_sections = geometry.sections_with_elements(event_element_slips.keys())
-
-    #print event_element_data
-    print 'Done initilizing data - {} seconds'.format(time.time() - start_time)
-    print '{} elements in event'.format(len(event_element_slips))
-    print '{} sections in event'.format(len(event_sections))
-    #print event_sections
     
-    start_time = time.time()
+    sys.stdout.write('{} elements in {} sections : '.format(len(event_element_slips), len(event_sections)))
+    sys.stdout.flush()
+    
+    sys.stdout.write( '{} field : '.format(field_type))
+    sys.stdout.flush()
+    
     if field_type == 'displacement':
         EF = VCDisplacementField(min_lat, max_lat, min_lon, max_lon, base_lat, base_lon, padding=padding)
     elif field_type == 'gravity':
         EF = VCGravityField(min_lat, max_lat, min_lon, max_lon, base_lat, base_lon, padding=padding)
-    print 'Done initilizing field - {} seconds'.format(time.time() - start_time)
 
-    start_time = time.time()
+    sys.stdout.write('done\n')
+    sys.stdout.flush()
+
+
+    sys.stdout.write('Calculating {} values :: '.format(field_type))
+    sys.stdout.flush()
     EF.calculate_field_values(event_element_data, event_element_slips, cutoff=cutoff)
+    '''
     if field_type == 'displacement':
         np.save('local/dX.npy', EF.dX)
         np.save('local/dY.npy', EF.dY)
         np.save('local/dZ.npy', EF.dZ)
-        
         #EF.dX = np.load('local/dX.npy')
         #EF.dY = np.load('local/dY.npy')
         #EF.dZ = np.load('local/dZ.npy')
     elif field_type == 'gravity':
         np.save('local/dG.npy', EF.dG)
-
         #EF.dG = np.load('local/dG.npy')
+    '''
+    sys.stdout.write('done\n')
+    sys.stdout.flush()
 
-    print 'Done calculating displacements - {} seconds'.format(time.time() - start_time)
-    
-    #cPickle.dump((df.dX, df.dY, df.dZ), open('local/test_disp.pkl','wb'))
-    start_time = time.time()
+    sys.stdout.write('Plotting :: initializing : ')
+    sys.stdout.flush()
+
     if field_type == 'displacement':
         EFP = VCDisplacementFieldPlotter(EF.min_lat, EF.max_lat, EF.min_lon, EF.max_lon)
     elif field_type == 'gravity':
         EFP = VCGravityFieldPlotter(EF.min_lat, EF.max_lat, EF.min_lon, EF.max_lon)
     EFP.set_field(EF)
-    print 'Done initilizing the plotter - {} seconds'.format(time.time() - start_time)
 
     if field_type == 'displacement':
         start_time = time.time()
         EFP.calculate_look_angles(event_element_data)
-        print 'Done calculating look angles - {} seconds'.format(time.time() - start_time)
-    
-    start_time = time.time()
+
+    sys.stdout.write('map image : ')
+    sys.stdout.flush()
+
     map_image = EFP.create_field_image(fringes=fringes)
-    print 'Done creating the map image - {} seconds'.format(time.time() - start_time)
-    
+
+    sys.stdout.write('map overlay : ')
+    sys.stdout.flush()
     # Convert the fault traces to lat-lon
     fault_traces_latlon = {}
     for secid in fault_traces.iterkeys():
          fault_traces_latlon[secid] = zip(*[(lambda y: (y.lat(),y.lon()))(EF.convert.convert2LatLon(quakelib.Vec3(x[0], x[1], x[2]))) for x in fault_traces[secid]])
-    
-    start_time = time.time()
+
     #---------------------------------------------------------------------------
     # Plot all of the geographic info on top of the displacement map image.
     #---------------------------------------------------------------------------
@@ -1767,7 +1842,7 @@ def plot_event_field(sim_file, output_file, evnum, field_type='displacement', fr
     
     mw = EF.lons_1d.size
     mh = EF.lats_1d.size
-    
+
     if mh > mw:
         ph = 768.0
         pw = mw + 70.0 + 40.0
@@ -1782,6 +1857,7 @@ def plot_event_field(sim_file, output_file, evnum, field_type='displacement', fr
 
     pwi = pw/plot_resolution
     phi = ph/plot_resolution
+
     fig4 = mplt.figure(figsize=(pwi, phi), dpi=plot_resolution)
 
     #---------------------------------------------------------------------------
@@ -1891,11 +1967,11 @@ def plot_event_field(sim_file, output_file, evnum, field_type='displacement', fr
         m4.plot(trace_Xs, trace_Ys, color=fault_color, linewidth=linewidth, solid_capstyle='round', solid_joinstyle='round')
 
     #plot the cb
-    cb_left_frac = 70.0/pw
-    cb_bottom_frac = (70.0 - cb_height - cb_margin_t)/ph
-    cb_width_frac = width_frac
-    cb_height_frac = cb_height/ph
-
+    left_frac = 70.0/pw
+    bottom_frac = (70.0 - cb_height - cb_margin_t)/ph
+    width_frac = mw/pw
+    height_frac = cb_height/ph
+    
     cb_ax = fig4.add_axes((left_frac,bottom_frac,width_frac,height_frac))
     norm = EFP.norm
     cb = mcolorbar.ColorbarBase(cb_ax, cmap=cmap,
@@ -1922,7 +1998,8 @@ def plot_event_field(sim_file, output_file, evnum, field_type='displacement', fr
     # save the figure
     fig4.savefig(output_file, format='png', dpi=plot_resolution)
 
-    print 'Done plotting the image - {} seconds'.format(time.time() - start_time)
+    sys.stdout.write('done\n')
+    sys.stdout.flush()
 
 #-------------------------------------------------------------------------------
 # plots recurrence intervals
