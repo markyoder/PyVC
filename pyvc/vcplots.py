@@ -330,8 +330,13 @@ class VCGravityField(VCField):
             self.init_field(0.0)
         
         try:
-            self.dG += np.load('{}dG.npy'.format(file_prefix))
+            dG += np.load('{}dG.npy'.format(file_prefix))
             
+            min = np.min(np.fabs(dG[dG.nonzero()]))
+            if min < self.dG_min:
+                self.dG_min = min
+            
+            self.dG += dG
             return True
         except IOError:
             return False
@@ -473,9 +478,23 @@ class VCDisplacementField(VCField):
             self.init_field(0.0)
         
         try:
-            self.dX += np.load('{}dX.npy'.format(file_prefix))
-            self.dY += np.load('{}dY.npy'.format(file_prefix))
-            self.dZ += np.load('{}dZ.npy'.format(file_prefix))
+            dX = np.load('{}dX.npy'.format(file_prefix))
+            dY = np.load('{}dY.npy'.format(file_prefix))
+            dZ = np.load('{}dZ.npy'.format(file_prefix))
+            
+            min_x = np.min(np.fabs(dX[dX.nonzero()]))
+            if min_x < self.dX_min:
+                self.dX_min = min_x
+            min_y = np.min(np.fabs(dY[dY.nonzero()]))
+            if min_y < self.dY_min:
+                self.dY_min = min_y
+            min_z = np.min(np.fabs(dZ[dZ.nonzero()]))
+            if min_z < self.dZ_min:
+                self.dZ_min = min_z
+
+            self.dX += dX
+            self.dY += dY
+            self.dZ += dZ
             
             return True
         except IOError:
