@@ -892,7 +892,7 @@ class VCGravityFieldPlotter(object):
         self.m3.ax = fig3.add_axes((0,0,1,1))
         #self.m3.fillcontinents(color='#000000', lake_color='#ffffff')
         dG_abs = np.fabs(dG_transformed)
-        print np.amin(dG_abs), np.amax(dG_abs), 1e6*np.amin(dG_abs), np.amax(dG_abs)*1e-1
+        #print np.amin(dG_abs), np.amax(dG_abs), 1e6*np.amin(dG_abs), np.amax(dG_abs)*1e-1
         im = self.m3.imshow(dG_abs, cmap=mplt.get_cmap('gray_r'), norm=mcolor.Normalize(vmin=1e6*np.amin(dG_abs), vmax=np.amax(dG_abs)*1e-1, clip=True))
         
         fig3.savefig('local/test_mask.png', format='png', dpi=plot_resolution)
@@ -1616,7 +1616,7 @@ def event_field_animation(sim_file, output_directory, event_range,
         
         #proc_args = "ffmpeg -y -r 30 -sameq -i %s_images/%s_%s.png %s.mp4"%(sys_name,sys_name,"%d",sys_name)
         
-        proc_args = 'ffmpeg -y -r {fps} -sameq -i {dir}{inc}.png {out}animation.mpg'.format(
+        proc_args = 'ffmpeg -y -r {fps} -sameq -i {dir}{inc}.png {out}animation.mp4'.format(
             fps=int(animation_fps),
             dir=frame_images_directory,
             inc='%d',
