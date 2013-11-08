@@ -954,7 +954,8 @@ class VCGravityFieldPlotter(object):
 #-------------------------------------------------------------------------------
 def event_field_animation(sim_file, output_directory, event_range,
     field_type='displacement', fringes=True, padding=0.01, cutoff=None,
-    animation_target_length=60.0, animation_fps = 30.0, fade_seconds = 1.0, min_mag_marker = 6.5, force_plot=False):
+    animation_target_length=60.0, animation_fps = 30.0, fade_seconds = 1.0,
+    min_mag_marker = 6.5, force_plot=False):
     
     sys.stdout.write('Initializing animation :: ')
     sys.stdout.flush()
@@ -1200,7 +1201,12 @@ def event_field_animation(sim_file, output_directory, event_range,
                         sys.stdout.write('{} elements :: '.format(len(event_element_slips)))
                         sys.stdout.flush()
                         
-                        EF.calculate_field_values(event_element_data, event_element_slips, cutoff=cutoff, save_file_prefix='{}{}_'.format(field_values_directory, evnum))
+                        EF.calculate_field_values(
+                            event_element_data,
+                            event_element_slips,
+                            cutoff=cutoff,
+                            save_file_prefix='{}{}_'.format(field_values_directory, evnum)
+                        )
                         
                         if i < len(evnums_this_frame)-1 :
                             sys.stdout.write('\033[2K')
@@ -1282,6 +1288,7 @@ def event_field_animation(sim_file, output_directory, event_range,
                 )
                 m4.ax = fig4.add_axes((left_frac,bottom_frac,width_frac,height_frac))
                 
+                # Draw a frame around the map.
                 m4.drawmapboundary(color=map_frame_color, linewidth=map_frame_width, fill_color=(1,1,1,0))
 
                 # draw coastlines, edge of map.
@@ -1295,11 +1302,29 @@ def event_field_animation(sim_file, output_directory, event_range,
 
                 # draw parallels.
                 parallels = np.linspace(EFP.lats_1d.min(), EFP.lats_1d.max(), num_grid_lines+1)
-                m4_parallels = m4.drawparallels(parallels, labels=[1,0,0,0], fontsize=map_fontsize, color=grid_color, fontproperties=font, fmt='%.2f', linewidth=grid_width, dashes=[1, 10])
+                m4_parallels = m4.drawparallels(
+                    parallels,
+                    labels=[1,0,0,0],
+                    fontsize=map_fontsize,
+                    color=grid_color,
+                    fontproperties=font,
+                    fmt='%.2f',
+                    linewidth=grid_width,
+                    dashes=[1, 10]
+                )
 
                 # draw meridians
                 meridians = np.linspace(EFP.lons_1d.min(), EFP.lons_1d.max(), num_grid_lines+1)
-                m4_meridians = m4.drawmeridians(meridians, labels=[0,0,1,0], fontsize=map_fontsize, color=grid_color, fontproperties=font, fmt='%.2f', linewidth=grid_width, dashes=[1, 10])
+                m4_meridians = m4.drawmeridians(
+                    meridians,
+                    labels=[0,0,1,0],
+                    fontsize=map_fontsize,
+                    color=grid_color,
+                    fontproperties=font,
+                    fmt='%.2f',
+                    linewidth=grid_width,
+                    dashes=[1, 10]
+                )
 
                 # add the displacement map image to the plot
                 m4.imshow(map_image, origin='upper')
@@ -1422,7 +1447,7 @@ def event_field_animation(sim_file, output_directory, event_range,
                     fm_y = []
                     for num, magnitude in enumerate(sorted(cumulative_magnitudes)):
                         cum_freq['{:0.10f}'.format(magnitude)] = current_total_events - (num + 1)
-                    #print cum_freq
+                    
                     for magnitude in sorted(cum_freq.iterkeys()):
                         fm_x.append(magnitude)
                         fm_y.append(float(cum_freq[magnitude]))
@@ -1544,7 +1569,10 @@ def event_field_animation(sim_file, output_directory, event_range,
                     al_ax.add_line(mlines.Line2D((0.1,0.9), (0.1,0.1), lw=1.0, ls=':', c='k', dashes=(2.0,1.0)))
                     al_ax.add_patch(mpatches.Arc((0.1,0.1), 0.5, 0.5, theta1=0.0, theta2=EF.convert.rad2deg(EFP.look_elevation), fc='none', lw=1.0, ls='dotted', ec='k'))
                     al_ax.text(1.0, 1.0, 'al = {:0.1f}{}'.format(EF.convert.rad2deg(EFP.look_elevation),r'$^{\circ}$'), fontproperties=font_bold, size=arrow_fontsize, ha='right', va='top')
-
+                
+                #---------------------------------------------------------------
+                # Save the figure and clear out all matplotlib figures.
+                #---------------------------------------------------------------
                 fig4.savefig('{}{}.png'.format(frame_images_directory, the_frame), format='png', dpi=plot_resolution)
                 
                 fig4.clf()
@@ -1581,10 +1609,15 @@ def event_field_animation(sim_file, output_directory, event_range,
             sys.stdout.write('\033[2K')
             sys.stdout.write('\033[1A\r')
             sys.stdout.write('\033[2K')
-
-
-        proc_args = 'ffmpeg -y -r {fps} -f image2 -i {dir}{inc}.png {out}animation.mp4'.format(
-            fps=animation_fps,
+        
+        #-----------------------------------------------------------------------
+        # Create the movie using ffmpeg.
+        #-----------------------------------------------------------------------
+        
+        #proc_args = "ffmpeg -y -r 30 -sameq -i %s_images/%s_%s.png %s.mp4"%(sys_name,sys_name,"%d",sys_name)
+        
+        proc_args = 'ffmpeg -y -r {fps} -sameq -i {dir}{inc}.png {out}animation.mp4'.format(
+            fps=int(animation_fps),
             dir=frame_images_directory,
             inc='%d',
             out=output_directory
