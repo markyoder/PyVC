@@ -297,7 +297,7 @@ class VCGravityField(VCField):
         # Combine the results
         #-----------------------------------------------------------------------
         for result in self.results:
-            min = np.min(np.fabs(result[result.nonzero()]))
+            min = np.amin(np.fabs(result[result.nonzero()]))
             if min < self.dG_min:
                 self.dG_min = min
             if self.dG is None:
@@ -332,7 +332,7 @@ class VCGravityField(VCField):
         try:
             dG = np.load('{}dG.npy'.format(file_prefix))
             
-            min = np.min(np.fabs(dG[dG.nonzero()]))
+            min = np.amin(np.fabs(dG[dG.nonzero()]))
             if min < self.dG_min:
                 self.dG_min = min
             
@@ -408,13 +408,13 @@ class VCDisplacementField(VCField):
         # Combine the results
         #-----------------------------------------------------------------------
         for result in self.results:
-            min_x = np.min(np.fabs(result['dX'][result['dX'].nonzero()]))
+            min_x = np.amin(np.fabs(result['dX'][result['dX'].nonzero()]))
             if min_x < self.dX_min:
                 self.dX_min = min_x
-            min_y = np.min(np.fabs(result['dY'][result['dY'].nonzero()]))
+            min_y = np.amin(np.fabs(result['dY'][result['dY'].nonzero()]))
             if min_y < self.dY_min:
                 self.dY_min = min_y
-            min_z = np.min(np.fabs(result['dZ'][result['dZ'].nonzero()]))
+            min_z = np.amin(np.fabs(result['dZ'][result['dZ'].nonzero()]))
             if min_z < self.dZ_min:
                 self.dZ_min = min_z
             
@@ -482,13 +482,13 @@ class VCDisplacementField(VCField):
             dY = np.load('{}dY.npy'.format(file_prefix))
             dZ = np.load('{}dZ.npy'.format(file_prefix))
             
-            min_x = np.min(np.fabs(dX[dX.nonzero()]))
+            min_x = np.amin(np.fabs(dX[dX.nonzero()]))
             if min_x < self.dX_min:
                 self.dX_min = min_x
-            min_y = np.min(np.fabs(dY[dY.nonzero()]))
+            min_y = np.amin(np.fabs(dY[dY.nonzero()]))
             if min_y < self.dY_min:
                 self.dY_min = min_y
-            min_z = np.min(np.fabs(dZ[dZ.nonzero()]))
+            min_z = np.amin(np.fabs(dZ[dZ.nonzero()]))
             if min_z < self.dZ_min:
                 self.dZ_min = min_z
 
