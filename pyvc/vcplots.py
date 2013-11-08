@@ -1616,7 +1616,7 @@ def event_field_animation(sim_file, output_directory, event_range,
         
         #proc_args = "ffmpeg -y -r 30 -sameq -i %s_images/%s_%s.png %s.mp4"%(sys_name,sys_name,"%d",sys_name)
         
-        proc_args = 'ffmpeg -y -r {fps} -sameq -i {dir}{inc}.png {out}animation.mp4'.format(
+        proc_args = 'ffmpeg -y -r {fps} -sameq -i {dir}{inc}.png {out}animation.mpg'.format(
             fps=int(animation_fps),
             dir=frame_images_directory,
             inc='%d',
