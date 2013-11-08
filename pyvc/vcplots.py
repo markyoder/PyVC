@@ -504,9 +504,11 @@ class VCDisplacementField(VCField):
         if self.dX is None or self.dY is None or self.dZ is None:
             self.init_field(0.0)
         
-        self.dX *= value
-        self.dY *= value
-        self.dZ *= value
+        self.dX *= percentage
+        self.dY *= percentage
+        self.dZ *= percentage
+        
+        #print percentage, self.dX_min, self.dY_min, self.dZ_min
         
         zeros = np.zeros(self.dX.shape)
         self.dX = np.where(self.dX >= self.dX_min, self.dX, zeros)
@@ -1261,7 +1263,7 @@ def event_field_animation(sim_file, output_directory, event_range,
 
             # Remove a fixed percentage from the field. This is the decay
             # that slowly fades existing field values.
-            EF.shrink_field(1.0/(animation_fps*fade_seconds))
+            EF.shrink_field(1.0 - 1.0/(animation_fps*fade_seconds))
             
             #-------------------------------------------------------------------
             # Load or calculate all of the data for the current frame.
@@ -1702,7 +1704,7 @@ def event_field_animation(sim_file, output_directory, event_range,
         
         #ffmpeg -y -r 15 -i f_%d.png -f mp4 -vcodec h264 -pix_fmt yuv420p animation.mp4
         
-        proc_args = 'ffmpeg -y -r {fps} -i {dir}{inc}.png -f mp4 -vcodec h264 -pix_fmt yuv420p {out}animation.mp4'.format(
+        proc_args = 'ffmpeg -y -r {fps} -start_number 0 -i {dir}{inc}.png -f mp4 -vcodec h264 -pix_fmt yuv420p {out}animation.mp4'.format(
             fps=int(animation_fps),
             dir=frame_images_directory,
             inc='%d',
