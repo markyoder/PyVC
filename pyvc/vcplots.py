@@ -297,9 +297,11 @@ class VCGravityField(VCField):
         # Combine the results
         #-----------------------------------------------------------------------
         for result in self.results:
+            '''
             min = np.amin(np.fabs(result[result.nonzero()]))
             if min < self.dG_min:
                 self.dG_min = min
+            '''
             if self.dG is None:
                 self.dG = result
             else:
@@ -332,9 +334,11 @@ class VCGravityField(VCField):
         try:
             dG = np.load('{}dG.npy'.format(file_prefix))
             
+            '''
             min = np.amin(np.fabs(dG[dG.nonzero()]))
             if min < self.dG_min:
                 self.dG_min = min
+            '''
             
             self.dG += dG
             return True
@@ -343,8 +347,8 @@ class VCGravityField(VCField):
     
     def shrink_field(self, percentage):
         self.dG *= percentage
-        zeros = np.zeros(self.dG.shape)
-        self.dG = np.where(self.dG >= self.dG_min, self.dG, zeros)
+        #zeros = np.zeros(self.dG.shape)
+        #self.dG = np.where(self.dG >= self.dG_min, self.dG, zeros)
     '''
     def __imul__(self, value):
         if self.dG is None:
@@ -408,6 +412,7 @@ class VCDisplacementField(VCField):
         # Combine the results
         #-----------------------------------------------------------------------
         for result in self.results:
+            '''
             min_x = np.amin(np.fabs(result['dX'][result['dX'].nonzero()]))
             if min_x < self.dX_min:
                 self.dX_min = min_x
@@ -417,7 +422,7 @@ class VCDisplacementField(VCField):
             min_z = np.amin(np.fabs(result['dZ'][result['dZ'].nonzero()]))
             if min_z < self.dZ_min:
                 self.dZ_min = min_z
-            
+            '''
             if self.dX is None:
                 self.dX = result['dX']
             else:
@@ -481,7 +486,7 @@ class VCDisplacementField(VCField):
             dX = np.load('{}dX.npy'.format(file_prefix))
             dY = np.load('{}dY.npy'.format(file_prefix))
             dZ = np.load('{}dZ.npy'.format(file_prefix))
-            
+            '''
             min_x = np.amin(np.fabs(dX[dX.nonzero()]))
             if min_x < self.dX_min:
                 self.dX_min = min_x
@@ -491,7 +496,7 @@ class VCDisplacementField(VCField):
             min_z = np.amin(np.fabs(dZ[dZ.nonzero()]))
             if min_z < self.dZ_min:
                 self.dZ_min = min_z
-
+            '''
             self.dX += dX
             self.dY += dY
             self.dZ += dZ
@@ -509,11 +514,12 @@ class VCDisplacementField(VCField):
         self.dZ *= percentage
         
         #print percentage, self.dX_min, self.dY_min, self.dZ_min
-        
+        '''
         zeros = np.zeros(self.dX.shape)
         self.dX = np.where(self.dX >= self.dX_min, self.dX, zeros)
         self.dY = np.where(self.dY >= self.dY_min, self.dY, zeros)
         self.dZ = np.where(self.dZ >= self.dZ_min, self.dZ, zeros)
+        '''
     
     '''
     def __imul__(self, value):
@@ -635,7 +641,7 @@ class VCDisplacementFieldPlotter(object):
             projection=map_proj,
             suppress_ticks=True
         )
-
+            
     def set_field(self, field):
         self.lons_1d = field.lons_1d
         self.lats_1d = field.lats_1d
@@ -1123,6 +1129,41 @@ def event_field_animation(sim_file, output_directory, event_range,
         elif field_type == 'gravity':
             EF = VCGravityField(min_lat, max_lat, min_lon, max_lon, base_lat, base_lon, padding=padding)
             EFP = VCGravityFieldPlotter(EF.min_lat, EF.max_lat, EF.min_lon, EF.max_lon)
+
+        #-----------------------------------------------------------------------
+        # Find the biggest event and normalize based on these values.
+        #-----------------------------------------------------------------------
+        if field_type == 'displacement' and not fringes or field_type == 'gravity':
+            sys.stdout.write('normalizing : ')
+            sys.stdout.flush()
+            max_mag_evnum = event_numbers[event_magnitudes.index(max(event_magnitudes))]
+            field_values_loaded = EF.load_field_values('{}{}_'.format(field_values_directory, max_mag_evnum))
+            if field_values_loaded:
+                sys.stdout.write('event {} loaded : '.format(max_mag_evnum))
+                sys.stdout.flush()
+            if not field_values_loaded:
+                sys.stdout.write('event {} processing : '.format(max_mag_evnum))
+                sys.stdout.flush()
+                event_element_slips = events.get_event_element_slips(evnum)
+                ele_getter = itemgetter(*event_element_slips.keys())
+                event_element_data = ele_getter(geometry)
+                if len(event_element_slips) == 1:
+                    event_element_data = [event_element_data]
+            
+                sys.stdout.write('{} elements : '.format(len(event_element_slips)))
+                sys.stdout.flush()
+                
+                EF.calculate_field_values(
+                    event_element_data,
+                    event_element_slips,
+                    cutoff=cutoff,
+                    save_file_prefix='{}{}_'.format(field_values_directory, evnum)
+                )
+            EFP.set_field(EF)
+            EFP.create_field_image()
+            sys.stdout.write('done : ')
+            sys.stdout.flush()
+
         
         # Convert the fault traces to lat-lon
         fault_traces_latlon = {}
