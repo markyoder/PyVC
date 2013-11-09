@@ -533,6 +533,8 @@ class VCDisplacementFieldPlotter(object):
         self.look_elevation = None
         self.wavelength = 0.03
         
+        self.norm = None
+        
         #-----------------------------------------------------------------------
         # DisplacementmMap configuration
         #-----------------------------------------------------------------------
@@ -722,7 +724,8 @@ class VCDisplacementFieldPlotter(object):
                 dMags_colors[i, j, 1] = g
                 dMags_colors[i, j, 2] = b
                 dMags_colors[i, j, 3] = a
-            self.norm = mcolor.Normalize(vmin=0, vmax=self.wavelength)
+            if self.norm is None:
+                self.norm = mcolor.Normalize(vmin=0, vmax=self.wavelength)
             im = self.m2.imshow(dMags_colors, interpolation='spline36')
         else:
             dMags_colors = np.empty(dMags_transformed.shape)
@@ -741,7 +744,8 @@ class VCDisplacementFieldPlotter(object):
                 mod_vmax = 1000
             elif vmax > 1000:
                 mod_vmax = 1000
-            self.norm = mcolor.LogNorm(vmin=5e-4, vmax=mod_vmax, clip=True)
+            if self.norm is None:
+                self.norm = mcolor.LogNorm(vmin=5e-4, vmax=mod_vmax, clip=True)
             im = self.m2.imshow(dMags_colors, cmap=cmap, norm=self.norm)
         
         #-----------------------------------------------------------------------
@@ -828,6 +832,9 @@ class VCDisplacementFieldPlotter(object):
 
 class VCGravityFieldPlotter(object):
     def __init__(self, min_lat, max_lat, min_lon, max_lon, map_res='i', map_proj='cyl'):
+        
+        self.norm = None
+        
         #-----------------------------------------------------------------------
         # Gravity map configuration
         #-----------------------------------------------------------------------
@@ -969,7 +976,9 @@ class VCGravityFieldPlotter(object):
         # make sure the values are located at the correct location on the map
         dG_transformed = self.m2.transform_scalar(self.dG, self.lons_1d, self.lats_1d, self.lons_1d.size, self.lats_1d.size)
         
-        self.norm = mcolor.Normalize(vmin=np.amin(dG_transformed), vmax=np.amax(dG_transformed))
+        if self.norm is None:
+            self.norm = mcolor.Normalize(vmin=np.amin(dG_transformed), vmax=np.amax(dG_transformed))
+        
         self.m2.imshow(dG_transformed, cmap=cmap, norm=self.norm)
         
         
