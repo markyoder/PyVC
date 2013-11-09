@@ -987,7 +987,6 @@ class VCGravityFieldPlotter(object):
         
         self.m2.imshow(dG_transformed, cmap=cmap, norm=self.norm)
         
-        
         #-----------------------------------------------------------------------
         # Fig3 is the land/sea mask.
         #-----------------------------------------------------------------------
