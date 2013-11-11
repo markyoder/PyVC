@@ -1160,9 +1160,6 @@ def event_field_animation(sim_file, output_directory, event_range,
                 )
             EFP.set_field(EF)
             EFP.create_field_image()
-            sys.stdout.write('done : ')
-            sys.stdout.flush()
-
         
         # Convert the fault traces to lat-lon
         fault_traces_latlon = {}
