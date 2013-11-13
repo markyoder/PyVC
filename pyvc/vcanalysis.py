@@ -82,9 +82,18 @@ def graph_events(sim_file, output_file, event_range=None, section_filter=None, m
 def event_sequence(graph_file, start_sid, length):
     G = cPickle.load(open(graph_file, 'rb'))
     
-    matrix, order = nx.attr_matrix(G, edge_attr='weight', normalized=True)
+    matrix, order = nx.attr_matrix(G, edge_attr='weight', normalized=False)
     
+    print G[10][10]['weight'], matrix[10, 10]
     
+    '''
+    for node in G:
+        print node,
+        for neighbor in G[node]:
+            print neighbor,
+        print
+    '''
+    '''
     
     # plot parameters
     imw = 1024.0 # the full image width
@@ -114,7 +123,7 @@ def event_sequence(graph_file, start_sid, length):
     shear_ax.axis('tight')
     
     fig.savefig('local/graph_matrix.png', format='png')
-
+    '''
     '''
     total_weights = 0
     for sid, info in G[start_sid].iteritems():

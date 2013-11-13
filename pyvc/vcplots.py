@@ -983,7 +983,8 @@ class VCGravityFieldPlotter(object):
         dG_transformed = self.m2.transform_scalar(self.dG, self.lons_1d, self.lats_1d, self.lons_1d.size, self.lats_1d.size)
         
         if self.norm is None:
-            self.norm = mcolor.Normalize(vmin=np.amin(dG_transformed), vmax=np.amax(dG_transformed))
+            #self.norm = mcolor.Normalize(vmin=np.amin(dG_transformed), vmax=np.amax(dG_transformed))
+            self.norm = mcolor.Normalize(vmin=-2e-7, vmax=2e-7)
         
         self.m2.imshow(dG_transformed, cmap=cmap, norm=self.norm)
         
@@ -1049,7 +1050,8 @@ class VCGravityFieldPlotter(object):
         
         #mask = Image.new("L", (w,h), 'black')
         # The final composited image.
-        return  Image.composite(im1, im2, mask)
+        #return  Image.composite(im1, im2, mask)
+        return im2
 
 #-------------------------------------------------------------------------------
 # event field animation
