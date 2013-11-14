@@ -984,9 +984,12 @@ class VCGravityFieldPlotter(object):
         
         if self.norm is None:
             #self.norm = mcolor.Normalize(vmin=np.amin(dG_transformed), vmax=np.amax(dG_transformed))
-            self.norm = mcolor.Normalize(vmin=-2e-7, vmax=2e-7)
+            # Changed units to microgals (multiply MKS unit by 10^8)
+            self.norm = mcolor.Normalize(vmin=-20, vmax=20)
         
-        self.m2.imshow(dG_transformed, cmap=cmap, norm=self.norm)
+        #self.m2.imshow(dG_transformed, cmap=cmap, norm=self.norm)
+        # Changed units to microgals (multiply MKS unit by 10^8)
+        self.m2.imshow(dG_transformed*float(pow(10,8)), cmap=cmap, norm=self.norm)
         
         #-----------------------------------------------------------------------
         # Fig3 is the land/sea mask.
@@ -1235,7 +1238,11 @@ def event_field_animation(sim_file, output_directory, event_range,
         mag_fontsize = 12
         
         fm_fontsize = 9
-        fm_label_color = 'white'
+        if field_type=='displacement':
+            fm_label_color = 'white'
+        else:
+            fm_label_color = 'black'
+            
         fm_frame_width = 1
         fm_frame_color = 'k'
         fm_line_color = '0.0'
@@ -1647,7 +1654,7 @@ def event_field_animation(sim_file, output_directory, event_range,
                         cb_title = 'Total displacement [m]'
 
                 elif field_type == 'gravity':
-                    cb_title = 'Gravity changes [unit]'
+                    cb_title = r'Gravity changes [$\mu gal$]'
 
                 cb_ax.set_title(cb_title, fontproperties=font, color=cb_fontcolor, size=cb_fontsize, va='top', ha='left', position=(0,-1.5) )
 
@@ -1655,6 +1662,7 @@ def event_field_animation(sim_file, output_directory, event_range,
                     label.set_fontproperties(font)
                     label.set_fontsize(cb_fontsize)
                     label.set_color(cb_fontcolor)
+                                      
                 for line in cb_ax.xaxis.get_ticklines():
                     line.set_alpha(0)
             
@@ -1705,6 +1713,17 @@ def event_field_animation(sim_file, output_directory, event_range,
                     al_ax.add_line(mlines.Line2D((0.1,0.9), (0.1,0.1), lw=1.0, ls=':', c='k', dashes=(2.0,1.0)))
                     al_ax.add_patch(mpatches.Arc((0.1,0.1), 0.5, 0.5, theta1=0.0, theta2=EF.convert.rad2deg(EFP.look_elevation), fc='none', lw=1.0, ls='dotted', ec='k'))
                     al_ax.text(1.0, 1.0, 'al = {:0.1f}{}'.format(EF.convert.rad2deg(EFP.look_elevation),r'$^{\circ}$'), fontproperties=font_bold, size=arrow_fontsize, ha='right', va='top')
+                #---------------------------------------------------------------
+                # If the field is a gravity field change outermost tick labels
+                # on colorbar.
+                #---------------------------------------------------------------
+                else:
+                    # Want to change outermost tick labels on colorbar
+                    #   from 'VALUE','-VALUE' to '>VALUE' and '<-VALUE'    
+                    cb_tick_labs = [item.get_text() for item in cb_ax.get_xticklabels()]
+                    cb_tick_labs[0] = '<'+cb_tick_labs[0]
+                    cb_tick_labs[-1] = '>'+cb_tick_labs[-1]
+                    cb_ax.set_xticklabels(cb_tick_labs)
                 
                 #---------------------------------------------------------------
                 # Save the figure and clear out all matplotlib figures.
