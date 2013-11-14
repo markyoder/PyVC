@@ -882,7 +882,10 @@ class VCGravityFieldPlotter(object):
             'cb_fontsize':          10.0,
             'cb_fontcolor':         '#000000',
             'cb_height':            20.0,
-            'cb_margin_t':          10.0
+            'cb_margin_t':          10.0,
+         #min/max gravity change labels for colorbar (in microgals)
+            'cbar_min':             -20,
+            'cbar_max':             20
         }
         
         #-----------------------------------------------------------------------
@@ -985,7 +988,7 @@ class VCGravityFieldPlotter(object):
         if self.norm is None:
             #self.norm = mcolor.Normalize(vmin=np.amin(dG_transformed), vmax=np.amax(dG_transformed))
             # Changed units to microgals (multiply MKS unit by 10^8)
-            self.norm = mcolor.Normalize(vmin=-20, vmax=20)
+            self.norm = mcolor.Normalize(vmin=self.dmc['cbar_min'], vmax=self.dmc['cbar_max'])
         
         #self.m2.imshow(dG_transformed, cmap=cmap, norm=self.norm)
         # Changed units to microgals (multiply MKS unit by 10^8)
@@ -2072,7 +2075,12 @@ def plot_event_field(sim_file, output_file, evnum, field_type='displacement', fr
             cb_title = 'Total displacement [m]'
 
     elif field_type == 'gravity':
-        cb_title = 'Gravity changes [unit]'
+        cb_title        = r'Gravity changes [$\mu gal$]'
+        # Make first and last ticks on colorbar be <MIN and >MAX
+        cb_tick_labs    = [item.get_text() for item in cb_ax.get_xticklabels()]
+        cb_tick_labs[0] = '<'+cb_tick_labs[0]
+        cb_tick_labs[-1]= '>'+cb_tick_labs[-1]
+        cb_ax.set_xticklabels(cb_tick_labs)
 
     cb_ax.set_title(cb_title, fontproperties=font, color=cb_fontcolor, size=cb_fontsize, va='top', ha='left', position=(0,-1.5) )
 
