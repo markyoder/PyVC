@@ -1832,10 +1832,27 @@ def plot_event_field(sim_file, evnum, output_file=None, field_type='displacement
     sys.stdout.write('done\n')
     sys.stdout.flush()
 
+    field_values_loaded = EF.load_field_values(save_file_prefix)
+ 
+    if field_values_loaded:
+        sys.stdout.write('event {} loaded : '.format(evnum))
+        sys.stdout.flush()
+    if not field_values_loaded:
+        sys.stdout.write('event {} processing : '.format(evnum))
+        sys.stdout.flush()          
+        sys.stdout.write('{} elements : '.format(len(event_element_slips)))
+        sys.stdout.flush()
+               
+        sys.stdout.write('Calculating {} values :: '.format(field_type))
+        sys.stdout.flush()        
+        
+        EF.calculate_field_values(
+                    event_element_data,
+                    event_element_slips,
+                    cutoff=cutoff,
+                    save_file_prefix=save_file_prefix)
+                
 
-    sys.stdout.write('Calculating {} values :: '.format(field_type))
-    sys.stdout.flush()
-    EF.calculate_field_values(event_element_data, event_element_slips, cutoff=cutoff, save_file_prefix=save_file_prefix)
     '''
     if field_type == 'displacement':
         np.save('local/dX.npy', EF.dX)
