@@ -7,6 +7,7 @@ import cPickle
 import sys
 import numpy as np
 import matplotlib.pyplot as mplt
+import itertools
 
 #-------------------------------------------------------------------------------
 # Prints out various information about a simulation.
@@ -74,18 +75,115 @@ def graph_events(sim_file, output_file, event_range=None, section_filter=None, m
                 except IndexError:
                     pass
     
+        # add the duration mean and standard deviation
+        for i in G:
+            for j in G[i]:
+                G[i][j]['duration_mean'] = np.mean(G[i][j]['duration'])
+                G[i][j]['duration_std'] = np.std(G[i][j]['duration'])
+
         # save the graph
         sys.stdout.write('\nSaving graph ')
         sys.stdout.flush()
         cPickle.dump(G, open(output_file, 'wb'))
 
-def event_sequence(graph_file, start_sid, length):
+def event_sequence_r(sid, matrix, pos_sid, sid_pos, depth, results, stack, top):
+    indices =  (np.argsort(matrix[sid_pos[sid], :]).T)[::-1][0:top]
+    
+    depth -= 1
+    
+    #sids = []
+    
+    #print sid, depth
+    
+    #results.append(sid)
+    
+    #if len(results) > 2:
+    #    for i in stack:
+    #        results.append(i)
+    
+    stack.append(sid)
+    
+    
+    if depth >= 0:
+        #print depth, '--', sid_pos[sid], '--', sid
+        #for i in indices:
+        #    print i[0,0], pos_sid[i[0,0]]
+        #    sids.append(pos_sid[i[0,0]])
+        #print
+        
+        for i in indices:
+            
+            #results.append(pos_sid[i[0,0]])
+            event_sequence_r( pos_sid[i[0,0]], matrix, pos_sid, sid_pos, depth, results, stack, top)
+        #return sids
+        stack.pop()
+    else:
+        #print stack
+        for i in stack:
+            results.append(i)
+        stack.pop()
+        #print
+
+def sequence_probability(sequence, matrix, sid_pos):
+    
+    ret = 1
+    
+    for i in range(sequence.size):
+        try:
+            ret *= matrix[sid_pos[sequence[i]], sid_pos[sequence[i+1]]]
+        except IndexError:
+            pass
+
+    return ret
+
+
+
+
+def event_sequence(graph_file, start_sid, length, top=3):
     G = cPickle.load(open(graph_file, 'rb'))
     
-    matrix, order = nx.attr_matrix(G, edge_attr='weight', normalized=False)
+    matrix, pos_sid = nx.attr_matrix(G, edge_attr='weight', normalized=True)
     
-    print G[10][10]['weight'], matrix[10, 10]
+    sid_pos = {sid: position for (position, sid) in enumerate(pos_sid)}
     
+    results = []
+    event_sequence_r(start_sid, matrix, pos_sid, sid_pos, length, results, [], top)
+    
+    _results = np.reshape(np.array(results), (-1, length+1))
+    
+    for i in range(_results.shape[0]):
+        print _results[i], sequence_probability(_results[i], matrix, sid_pos)
+    
+    #print _results[0]
+    #print len(results), _results.shape, _results.size
+    #indices =  (np.argsort(matrix[start_sid, :]).T)[::-1][0:3]
+    #print indices[::-1]
+    #for i in indices:
+    #    print i[0,0]
+    
+    #for i in itertools.permutations(order,length):
+    #    print i
+    #print node_map
+    '''
+    my_matrix = np.zeros((len(G), len(G)))
+    
+    node_map = {node: key for (key, node) in enumerate(G)}
+    #for i, node in enumerate(G):
+    
+    for i, node in enumerate(G):
+        for sid, info in G[node].iteritems():
+            j = node_map[sid]
+            my_matrix[i,j] = info['weight']
+    
+    n1 = 10
+    n2 = 10
+    
+    total_weights = 0
+    for sid, info in G[n1].iteritems():
+        total_weights += info['weight']
+    
+    print my_matrix[n1, n2], matrix[n1, n2], total_weights
+    '''
     '''
     for node in G:
         print node,
@@ -93,8 +191,17 @@ def event_sequence(graph_file, start_sid, length):
             print neighbor,
         print
     '''
-    '''
     
+    
+    #print '11,10', matrix[11, 10]
+    #print '10,11', matrix[10, 11]
+    #print order
+    
+    #it = np.nditer(matrix[start_sid, 0:20], flags=['c_index'])
+    #while not it.finished:
+    #    print it.index, order[it.index], it[0]
+    #    it.iternext()
+    '''
     # plot parameters
     imw = 1024.0 # the full image width
     imh = 1024.0
@@ -118,10 +225,14 @@ def event_sequence(graph_file, start_sid, length):
     pw = imw - lm - rm
     shear_ax = fig.add_axes((lm/imw, (bm+cbh+cbs)/imh, pw/imw, ph/imh))
     
-    shear_ax.imshow(matrix)
-    shear_ax.invert_yaxis()
-    shear_ax.axis('tight')
+    shear_ax.imshow(matrix.T, interpolation='none')
+    #shear_ax.axis('tight')
+    #shear_ax.set_ylim((15.5, 0.5))
+    #shear_ax.set_xlim((0.5, 15.5))
+    '''
     
+    
+    '''
     fig.savefig('local/graph_matrix.png', format='png')
     '''
     '''

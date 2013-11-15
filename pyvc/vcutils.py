@@ -463,9 +463,10 @@ def standard_plot(output_file, x, y, legend_loc='best', **kwargs):
         # create a legend if we have extra lines
         if add_lines is not None:
             the_ax.legend(prop=legendfont, loc=legend_loc)
-
-        # save the plot
-        mplt.savefig(output_file, format=plot_format, dpi=res)
+        
+        if output_file is not None:
+            # save the plot
+            mplt.savefig(output_file, format=plot_format, dpi=res)
 
 #-------------------------------------------------------------------------------
 # a class to manage the space-time plot
@@ -774,12 +775,13 @@ class VCSpaceTimePlot(object):
         # Set the plot y-axis label
         self.the_ax.set_ylabel('Year',fontproperties=self.framelabelfont)
         
-        # Get the plot format and save the file
-        plot_format = self.output_file.split('.')[-1]
-        if plot_format != 'png' and plot_format != 'pdf':
-            raise vcexceptions.PlotFormatNotSupported(plot_format)
-        else:
-            self.fig.savefig(self.output_file, format=plot_format, dpi=self.res)
+        if self.output_file is not None:
+            # Get the plot format and save the file
+            plot_format = self.output_file.split('.')[-1]
+            if plot_format != 'png' and plot_format != 'pdf':
+                raise vcexceptions.PlotFormatNotSupported(plot_format)
+            else:
+                self.fig.savefig(self.output_file, format=plot_format, dpi=self.res)
 
 #-------------------------------------------------------------------------------
 # A class for plotting spacetime events in parallel. This is currently under

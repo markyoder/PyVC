@@ -1787,7 +1787,7 @@ def event_field_animation(sim_file, output_directory, event_range,
 #-------------------------------------------------------------------------------
 # plots event fields
 #-------------------------------------------------------------------------------
-def plot_event_field(sim_file, output_file, evnum, field_type='displacement', fringes=True, padding=0.01, cutoff=None):
+def plot_event_field(sim_file, evnum, output_file=None, field_type='displacement', fringes=True, padding=0.01, cutoff=None, save_file_prefix=None):
     
     sys.stdout.write('Initializing plot :: ')
     sys.stdout.flush()
@@ -1835,7 +1835,7 @@ def plot_event_field(sim_file, output_file, evnum, field_type='displacement', fr
 
     sys.stdout.write('Calculating {} values :: '.format(field_type))
     sys.stdout.flush()
-    EF.calculate_field_values(event_element_data, event_element_slips, cutoff=cutoff)
+    EF.calculate_field_values(event_element_data, event_element_slips, cutoff=cutoff, save_file_prefix=save_file_prefix)
     '''
     if field_type == 'displacement':
         np.save('local/dX.npy', EF.dX)
@@ -2091,8 +2091,9 @@ def plot_event_field(sim_file, output_file, evnum, field_type='displacement', fr
     for line in cb_ax.xaxis.get_ticklines():
         line.set_alpha(0)
 
-    # save the figure
-    fig4.savefig(output_file, format='png', dpi=plot_resolution)
+    if output_file is not None:
+        # save the figure
+        fig4.savefig(output_file, format='png', dpi=plot_resolution)
 
     sys.stdout.write('done\n')
     sys.stdout.flush()
@@ -2100,7 +2101,7 @@ def plot_event_field(sim_file, output_file, evnum, field_type='displacement', fr
 #-------------------------------------------------------------------------------
 # plots recurrence intervals
 #-------------------------------------------------------------------------------
-def plot_recurrence_intervals(sim_file, output_file, event_range=None, section_filter=None, magnitude_filter=None):
+def plot_recurrence_intervals(sim_file, output_file=None, event_range=None, section_filter=None, magnitude_filter=None):
     #---------------------------------------------------------------------------
     # Plot setup
     #---------------------------------------------------------------------------
@@ -2164,7 +2165,7 @@ def plot_recurrence_intervals(sim_file, output_file, event_range=None, section_f
                 curr_row += 1.0
             #print curr_row, curr_col
             the_ax = fig.add_axes(((slm + curr_col * simw)/imw, (sbm + (num_rows - curr_row - 1) * simh)/imh, spw/imw, sph/imh))
-            section_events = events.get_event_data_from_evids(
+            section_events = events.get_event_data_from_evnums(
                                         geometry.events_on_section(secid),
                                         ['event_magnitude', 'event_year'],
                                         event_range=event_range,
@@ -2204,13 +2205,62 @@ def plot_recurrence_intervals(sim_file, output_file, event_range=None, section_f
     
             the_ax.legend(prop=legendfont)
 
-    # Get the plot format and save the file
-    plot_format = output_file.split('.')[-1]
-    if plot_format != 'png' and plot_format != 'pdf':
-        raise vcexceptions.PlotFormatNotSupported(plot_format)
-    else:
-        fig.savefig(output_file, format=plot_format, dpi=res)
+    if output_file is not None:
+        # Get the plot format and save the file
+        plot_format = output_file.split('.')[-1]
+        if plot_format != 'png' and plot_format != 'pdf':
+            raise vcexceptions.PlotFormatNotSupported(plot_format)
+        else:
+            fig.savefig(output_file, format=plot_format, dpi=res)
 
+#-------------------------------------------------------------------------------
+# plots a matrix of an event graph
+#-------------------------------------------------------------------------------
+def plot_graph_matrix(graph_file, output_file):
+    G = cPickle.load(open(graph_file, 'rb'))
+    
+    matrix_prob, pos_sid_prob = nx.attr_matrix(G, edge_attr='weight', normalized=True)
+    matrix_mean, pos_sid_mean = nx.attr_matrix(G, edge_attr='duration_mean')
+    matrix_std, pos_sid_std = nx.attr_matrix(G, edge_attr='duration_std')
+
+    #print pos_sid_prob
+    
+    # plot parameters
+    imw = 1024.0 # the full image width
+    imh = 1024.0
+    lm = 40.0
+    rm = 50.0
+    tm = 50.0
+    bm = 50.0
+    res = 72.0
+    cbh = 20.0
+    cbs = 40.0
+    
+    #arial14 = mpl.font_manager.FontProperties(family='Arial', style='normal', variant='normal', size=14)
+    #arial12 = mpl.font_manager.FontProperties(family='Arial', style='normal', variant='normal', size=12)
+    #arial10 = mpl.font_manager.FontProperties(family='Arial', style='normal', variant='normal', size=10)
+    #arial7_light = mpl.font_manager.FontProperties(family='Arial', style='normal', variant='normal', size=7, weight='light')
+    
+    imwi = imw/res
+    imhi = imh/res
+    fig = mplt.figure(figsize=(imwi, imhi), dpi=res)
+    ph = imh - tm - bm - cbh - cbs # the height for both matricies
+    pw = imw - lm - rm
+    ax = fig.add_axes((lm/imw, (bm+cbh+cbs)/imh, pw/imw, ph/imh))
+    
+    #print pos_sid_prob[::-1]
+    
+    ax.imshow(matrix_prob.T, interpolation='none')
+    ax.set_xticks(range(len(pos_sid_prob)))
+    ax.set_yticks(range(len(pos_sid_prob)))
+    ax.set_xticklabels(pos_sid_prob)
+    ax.set_yticklabels(pos_sid_prob)
+    #ax.axis('tight')
+    ax.set_ylim((15.5, -0.5))
+    ax.set_xlim((140.5, len(pos_sid_prob)-0.5))
+
+
+    
 #-------------------------------------------------------------------------------
 # plots an event graph
 #-------------------------------------------------------------------------------
@@ -2322,7 +2372,7 @@ def plot_graph(graph_file, output_file, degree_cut=None, label_degree_cut=0.25, 
 #-------------------------------------------------------------------------------
 # space-time plot
 #-------------------------------------------------------------------------------
-def space_time_plot(sim_file, output_file, event_range=None, section_filter=None, magnitude_filter=None):
+def space_time_plot(sim_file, output_file=None, event_range=None, section_filter=None, magnitude_filter=None):
     #---------------------------------------------------------------------------
     # Instantiate the VCSimData class using the with statement. Then instantiate
     # VCEvents class from within the with block. This ensures that the sim data
@@ -2476,7 +2526,7 @@ def magnitude_rupture_area(sim_file, output_file, event_range=None, section_filt
     # TODO: Move this to another function
     
     # All of the data is in mks units. We need kilometers for this plot.
-    event_area_kmsq = [vcutils.Converter().msq_kmsq(x) for x in event_data['event_area']]
+    event_area_kmsq = [quakelib.Conversion().sqm2sqkm(x) for x in event_data['event_area']]
     
     # get the binned averages of the data
     x_ave, y_ave = vcutils.calculate_averages(event_area_kmsq, event_data['event_magnitude'])
@@ -2575,7 +2625,7 @@ def average_slip_surface_rupture_length(sim_file, output_file, event_range=None,
     # TODO: Move this to another function
     
     # All of the data is in mks units. We need kilometers for this plot.
-    event_surface_rupture_length_km = [vcutils.Converter().m_km(x) for x in event_data['event_surface_rupture_length']]
+    event_surface_rupture_length_km = [quakelib.Conversion().m2km(x) for x in event_data['event_surface_rupture_length']]
     
     # get the binned averages of the data
     x_ave, y_ave = vcutils.calculate_averages(event_surface_rupture_length_km, event_data['event_average_slip'])
