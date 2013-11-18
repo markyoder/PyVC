@@ -1156,7 +1156,7 @@ def event_field_animation(sim_file, output_directory, event_range,
             if not field_values_loaded:
                 sys.stdout.write('event {} processing : '.format(max_mag_evnum))
                 sys.stdout.flush()
-                event_element_slips = events.get_event_element_slips(evnum)
+                event_element_slips = events.get_event_element_slips(max_mag_evnum)
                 ele_getter = itemgetter(*event_element_slips.keys())
                 event_element_data = ele_getter(geometry)
                 if len(event_element_slips) == 1:
@@ -1169,7 +1169,7 @@ def event_field_animation(sim_file, output_directory, event_range,
                     event_element_data,
                     event_element_slips,
                     cutoff=cutoff,
-                    save_file_prefix='{}{}_'.format(field_values_directory, evnum)
+                    save_file_prefix='{}{}_'.format(field_values_directory,max_mag_evnum)
                 )
             EFP.set_field(EF)
             EFP.create_field_image()
