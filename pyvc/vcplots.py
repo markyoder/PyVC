@@ -159,14 +159,17 @@ class VCField(object):
             suppress_ticks=True
         )
 
-        # Using the aspect ratio find the actual map width and height in pixels
-        if map.aspect > 1.0:
+        # Using the aspect ratio (h/w) to find the actual map width and height
+        # in pixels
+        if map.aspect > max_map_height/max_map_width:
             map_height = max_map_height
             map_width = max_map_height/map.aspect
         else:
             map_width = max_map_width
             map_height = max_map_width*map.aspect
-
+        
+        #print map.aspect, map_width, map_height, max_map_height/max_map_width
+        
         self.lons_1d = np.linspace(self.min_lon,self.max_lon,int(map_width))
         self.lats_1d = np.linspace(self.min_lat,self.max_lat,int(map_height))
         
@@ -683,6 +686,8 @@ class VCDisplacementFieldPlotter(object):
         mwi = mw/plot_resolution
         mhi = mh/plot_resolution
         
+        #print mw, mh
+        
         #-----------------------------------------------------------------------
         # Fig1 is the background land and ocean.
         #-----------------------------------------------------------------------
@@ -1063,7 +1068,7 @@ class VCGravityFieldPlotter(object):
 # event field animation
 #-------------------------------------------------------------------------------
 def event_field_animation(sim_file, output_directory, event_range,
-    field_type='displacement', fringes=True, padding=0.01, cutoff=None,
+    field_type='displacement', fringes=True, padding=0.08, cutoff=None,
     animation_target_length=60.0, animation_fps = 30.0, fade_seconds = 1.0,
     min_mag_marker = 6.5, force_plot=False):
     
@@ -1402,7 +1407,7 @@ def event_field_animation(sim_file, output_directory, event_range,
                 mmb = 70.0
                 
                 # Progress indicator map margin
-                pimm = 60.0
+                pimm = 70.0
                 # Progress indicator margin r
                 pimr = 50.0
                 
@@ -1787,7 +1792,7 @@ def event_field_animation(sim_file, output_directory, event_range,
 #-------------------------------------------------------------------------------
 # plots event fields
 #-------------------------------------------------------------------------------
-def plot_event_field(sim_file, evnum, output_file=None, field_type='displacement', fringes=True, padding=0.01, cutoff=None, save_file_prefix=None):
+def plot_event_field(sim_file, evnum, output_file=None, field_type='displacement', fringes=True, padding=0.08, cutoff=None, save_file_prefix=None):
     
     sys.stdout.write('Initializing plot :: ')
     sys.stdout.flush()
@@ -1835,16 +1840,13 @@ def plot_event_field(sim_file, evnum, output_file=None, field_type='displacement
     field_values_loaded = EF.load_field_values(save_file_prefix)
  
     if field_values_loaded:
-        sys.stdout.write('event {} loaded : '.format(evnum))
+        sys.stdout.write('Loading event {} {} field :: '.format(evnum, field_type))
         sys.stdout.flush()
     if not field_values_loaded:
-        sys.stdout.write('event {} processing : '.format(evnum))
+        sys.stdout.write('Processing event {} {} field :: '.format(evnum, field_type))
         sys.stdout.flush()          
         sys.stdout.write('{} elements : '.format(len(event_element_slips)))
         sys.stdout.flush()
-               
-        sys.stdout.write('Calculating {} values :: '.format(field_type))
-        sys.stdout.flush()        
         
         EF.calculate_field_values(
                     event_element_data,
