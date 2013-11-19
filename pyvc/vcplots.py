@@ -1002,7 +1002,7 @@ class VCGravityFieldPlotter(object):
         #-----------------------------------------------------------------------
         # Fig3 is the land/sea mask.
         #-----------------------------------------------------------------------
-        fig3 = mplt.figure(figsize=(mwi, mhi), dpi=plot_resolution)
+        """fig3 = mplt.figure(figsize=(mwi, mhi), dpi=plot_resolution)
         self.m3.ax = fig3.add_axes((0,0,1,1))
         #self.m3.fillcontinents(color='#000000', lake_color='#ffffff')
         dG_abs = np.fabs(dG_transformed)
@@ -1010,7 +1010,7 @@ class VCGravityFieldPlotter(object):
         im = self.m3.imshow(dG_abs, cmap=mplt.get_cmap('gray_r'), norm=mcolor.Normalize(vmin=1e6*np.amin(dG_abs), vmax=np.amax(dG_abs)*1e-1, clip=True))
         
         fig3.savefig('local/test_mask.png', format='png', dpi=plot_resolution)
-        
+        """
         #-----------------------------------------------------------------------
         # Composite fig 1 - 3 together
         #-----------------------------------------------------------------------
@@ -1039,7 +1039,7 @@ class VCGravityFieldPlotter(object):
         im2 = Image.fromstring( "RGBA", ( w ,h ), buf.tostring( ) )
         
         # FIGURE 3 draw the renderer
-        fig3.canvas.draw()
+        """fig3.canvas.draw()
         
         # FIGURE 3 Get the RGBA buffer from the figure
         w,h = fig3.canvas.get_width_height()
@@ -1051,11 +1051,12 @@ class VCGravityFieldPlotter(object):
         im3 = Image.fromstring( "RGBA", ( w ,h ), buf.tostring( ) )
         
         mask = im3.convert('L')
+        """
         
         # Clear all three figures
         fig1.clf()
         fig2.clf()
-        fig3.clf()
+        #fig3.clf()
         mplt.close('all')
         gc.collect()
         
