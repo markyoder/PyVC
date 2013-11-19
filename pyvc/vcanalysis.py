@@ -91,38 +91,19 @@ def event_sequence_r(sid, matrix, pos_sid, sid_pos, depth, results, stack, top):
     
     depth -= 1
     
-    #sids = []
-    
-    #print sid, depth
-    
-    #results.append(sid)
-    
-    #if len(results) > 2:
-    #    for i in stack:
-    #        results.append(i)
-    
     stack.append(sid)
     
     
     if depth >= 0:
-        #print depth, '--', sid_pos[sid], '--', sid
-        #for i in indices:
-        #    print i[0,0], pos_sid[i[0,0]]
-        #    sids.append(pos_sid[i[0,0]])
-        #print
         
         for i in indices:
             
-            #results.append(pos_sid[i[0,0]])
             event_sequence_r( pos_sid[i[0,0]], matrix, pos_sid, sid_pos, depth, results, stack, top)
-        #return sids
         stack.pop()
     else:
-        #print stack
         for i in stack:
             results.append(i)
         stack.pop()
-        #print
 
 def sequence_probability(sequence, matrix, sid_pos):
     
@@ -135,9 +116,6 @@ def sequence_probability(sequence, matrix, sid_pos):
             pass
 
     return ret
-
-
-
 
 def event_sequence(graph_file, start_sid, length, top=3):
     G = cPickle.load(open(graph_file, 'rb'))
