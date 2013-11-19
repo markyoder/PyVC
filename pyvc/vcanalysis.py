@@ -88,41 +88,17 @@ def graph_events(sim_file, output_file, event_range=None, section_filter=None, m
 
 def event_sequence_r(sid, matrix, pos_sid, sid_pos, depth, results, stack, top):
     indices =  (np.argsort(matrix[sid_pos[sid], :]).T)[::-1][0:top]
-    
     depth -= 1
-    
-    #sids = []
-    
-    #print sid, depth
-    
-    #results.append(sid)
-    
-    #if len(results) > 2:
-    #    for i in stack:
-    #        results.append(i)
-    
     stack.append(sid)
     
-    
     if depth >= 0:
-        #print depth, '--', sid_pos[sid], '--', sid
-        #for i in indices:
-        #    print i[0,0], pos_sid[i[0,0]]
-        #    sids.append(pos_sid[i[0,0]])
-        #print
-        
         for i in indices:
-            
-            #results.append(pos_sid[i[0,0]])
             event_sequence_r( pos_sid[i[0,0]], matrix, pos_sid, sid_pos, depth, results, stack, top)
-        #return sids
         stack.pop()
     else:
-        #print stack
         for i in stack:
             results.append(i)
         stack.pop()
-        #print
 
 def sequence_probability(sequence, matrix, sid_pos):
     
