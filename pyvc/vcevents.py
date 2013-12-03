@@ -111,7 +111,7 @@ class VCEvents(VCSys):
     #     'event_number'                 - the unique event id
     #     'event_year'                   - the decimal year in which the event
     #                                      occured
-    #     'event_trigger'                - the block_in of the element that
+    #     'event_trigger'                - the block_id of the element that
     #                                      triggered the event
     #     'event_magnitude'              - the magnitude of the event
     #     'event_shear_init'             - the shear stress before the event

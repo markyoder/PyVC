@@ -332,10 +332,14 @@ def standard_plot(output_file, x, y, legend_loc='best', **kwargs):
     plot_label = kwargs.get('plot_label')
     connect_points = kwargs.get('connect_points')
     axis_format = kwargs.get('axis_format')
+    
+    if output_file is not None:
+        plot_format = output_file.split('.')[-1]
+    else:
+        plot_format = 'png'
 
-    plot_format = output_file.split('.')[-1]
     if plot_format != 'png' and plot_format != 'pdf' and plot_format != 'dat':
-        raise vcexceptions.PlotFormatNotSupported(plot_format)
+            raise vcexceptions.PlotFormatNotSupported(plot_format)
     elif plot_format == 'png' or plot_format == 'pdf':
     #---------------------------------------------------------------------------
     # plot the data using matplotlib

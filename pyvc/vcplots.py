@@ -13,7 +13,10 @@ import math
 import multiprocessing
 import Queue
 import cPickle
+
 import networkx as nx
+from networkx.algorithms import bipartite
+
 from operator import itemgetter
 from mpl_toolkits.basemap import Basemap, maskoceans, interp
 import quakelib
@@ -2236,13 +2239,84 @@ def plot_recurrence_intervals(sim_file, output_file=None, event_range=None, sect
 #-------------------------------------------------------------------------------
 # plots a matrix of an event graph
 #-------------------------------------------------------------------------------
-def plot_graph_matrix(graph_file, output_file):
+def plot_bipartate_graph_matrix(graph_file, output_file=None):
     G = cPickle.load(open(graph_file, 'rb'))
     
-    matrix_prob, pos_sid_prob = nx.attr_matrix(G, edge_attr='weight', normalized=True)
-    matrix_mean, pos_sid_mean = nx.attr_matrix(G, edge_attr='duration_mean')
-    matrix_std, pos_sid_std = nx.attr_matrix(G, edge_attr='duration_std')
+    top_nodes = set(n for n,d in G.nodes(data=True) if d['bipartite']==0)
+    bottom_nodes = [n for n in sorted(set(G) - top_nodes, key=lambda n: G.degree(n), reverse=True)]
+            
+    print 'calculating matrix'
+    bij_matrix = bipartite.biadjacency_matrix(G, bottom_nodes, top_nodes, weight='weight')
+    
+    print bij_matrix.shape
+    # Aspect rations are always h/w
+    aspect = float(bij_matrix.shape[1])/float(bij_matrix.shape[0])
+    
+    print 'plotting matrix', len(top_nodes), len(bottom_nodes), bij_matrix.max()
+    #print pos_sid_prob
+    
+    # plot parameters
+    imh = 178.0        # the full image height
+    imw = round(imh/aspect)    # the width is set based on the aspect ratio
+    lm = 10.0
+    rm = 10.0
+    tm = 10.0
+    bm = 20.0
+    res = 72.0
+    ticklabelfont = mfont.FontProperties(family='Arial', style='normal', variant='normal', size=6)
+    cmap = mplt.get_cmap('hot_r')
+    
+    #arial14 = mpl.font_manager.FontProperties(family='Arial', style='normal', variant='normal', size=14)
+    #arial12 = mpl.font_manager.FontProperties(family='Arial', style='normal', variant='normal', size=12)
+    #arial10 = mpl.font_manager.FontProperties(family='Arial', style='normal', variant='normal', size=10)
+    #arial7_light = mpl.font_manager.FontProperties(family='Arial', style='normal', variant='normal', size=7, weight='light')
+    
+    imwi = imw/res
+    imhi = imh/res
+    fig = mplt.figure(figsize=(imwi, imhi), dpi=res)
+    ph = imh - tm - bm # the height for both matricies
+    pw = imw - lm - rm
+    print imh, imw, lm/imw, bm/imh, pw/imw, ph/imh
+    ax = fig.add_axes((lm/imw, bm/imh, pw/imw, ph/imh))
+    
+    #print pos_sid_prob[::-1]
+    
+    ax.imshow(bij_matrix.T, interpolation='none', cmap=cmap)
+    #ax.set_xticks(range(len(pos_sid_prob)))
+    #ax.set_yticks(range(len(pos_sid_prob)))
+    #ax.set_xticklabels(pos_sid_prob)
+    #ax.set_yticklabels(pos_sid_prob)
+    #for label in ax.xaxis.get_ticklabels()+ax.yaxis.get_ticklabels():
+    #    label.set_fontproperties(ticklabelfont)
 
+    #ax.axis('tight')
+    #ax.set_ylim((15.5, -0.5))
+    #ax.set_xlim((140.5, len(pos_sid_prob)-0.5))
+
+    if output_file is not None:
+        # save the figure
+        fig.savefig(output_file, format='png', dpi=res)
+
+#-------------------------------------------------------------------------------
+# plots a matrix of an event graph
+#-------------------------------------------------------------------------------
+def plot_graph_matrix(graph_file, output_file=None):
+    G = cPickle.load(open(graph_file, 'rb'))
+    
+    #matrix_prob, pos_sid_prob = nx.attr_matrix(G, edge_attr='weight', normalized=True)
+    #matrix_mean, pos_sid_mean = nx.attr_matrix(G, edge_attr='duration_mean')
+    #matrix_std, pos_sid_std = nx.attr_matrix(G, edge_attr='duration_std')
+    
+    for n in nx.nodes_iter(G):
+        if G.node[n]['type'] == 'section':
+            sequences_by_degree[n] = G.degree(n)
+            
+    print 'calculating matrix'
+    bij_matrix = nx.attr_matrix(G, rc_order=['section', 'sequence'])
+    
+    print np.max(matrix_prob)
+    '''
+    print 'plotting matrix', matrix_prob.shape
     #print pos_sid_prob
     
     # plot parameters
@@ -2255,6 +2329,7 @@ def plot_graph_matrix(graph_file, output_file):
     res = 72.0
     cbh = 20.0
     cbs = 40.0
+    ticklabelfont = mfont.FontProperties(family='Arial', style='normal', variant='normal', size=6)
     
     #arial14 = mpl.font_manager.FontProperties(family='Arial', style='normal', variant='normal', size=14)
     #arial12 = mpl.font_manager.FontProperties(family='Arial', style='normal', variant='normal', size=12)
@@ -2271,21 +2346,27 @@ def plot_graph_matrix(graph_file, output_file):
     #print pos_sid_prob[::-1]
     
     ax.imshow(matrix_prob.T, interpolation='none')
-    ax.set_xticks(range(len(pos_sid_prob)))
-    ax.set_yticks(range(len(pos_sid_prob)))
-    ax.set_xticklabels(pos_sid_prob)
-    ax.set_yticklabels(pos_sid_prob)
+    #ax.set_xticks(range(len(pos_sid_prob)))
+    #ax.set_yticks(range(len(pos_sid_prob)))
+    #ax.set_xticklabels(pos_sid_prob)
+    #ax.set_yticklabels(pos_sid_prob)
+    #for label in ax.xaxis.get_ticklabels()+ax.yaxis.get_ticklabels():
+    #    label.set_fontproperties(ticklabelfont)
+
     #ax.axis('tight')
-    ax.set_ylim((15.5, -0.5))
-    ax.set_xlim((140.5, len(pos_sid_prob)-0.5))
+    #ax.set_ylim((15.5, -0.5))
+    #ax.set_xlim((140.5, len(pos_sid_prob)-0.5))
 
+    '''
 
-    
 #-------------------------------------------------------------------------------
 # plots an event graph
 #-------------------------------------------------------------------------------
-def plot_graph(graph_file, output_file, degree_cut=None, label_degree_cut=0.25, self_loops=True):
-    G = cPickle.load(open(graph_file, 'rb'))
+def plot_graph(graph_file, output_file, degree_cut=None, label_degree_cut=0.25, self_loops=True, sequence=None):
+    if type(graph_file) is str:
+        G = cPickle.load(open(graph_file, 'rb'))
+    else:
+        G = graph_file
     
     #print(nx.clustering(nx.Graph(G), weight='weight'))
     
@@ -2321,7 +2402,7 @@ def plot_graph(graph_file, output_file, degree_cut=None, label_degree_cut=0.25, 
     min_degree = float(min(degrees.values()))
     print 'max degree: {}'.format(max_degree)
     print 'min degree: {}'.format(min_degree)
-    node_min = 0.01
+    node_min = 0.05
     node_max = 0.2
     node_line_min = 0.1
     node_line_max = 2.0
@@ -2338,19 +2419,32 @@ def plot_graph(graph_file, output_file, degree_cut=None, label_degree_cut=0.25, 
     font_sizes = {}
     #print max_degree, min_degree
     for n in nx.nodes_iter(Gsub):
-        degree = float(Gsub.degree(n, weight='weight'))
-        r,g,b,a = cmap(vcutils.linear_interp(degree, min_degree, max_degree, 0.0, 1.0))
-        dim = vcutils.linear_interp(degree, min_degree, max_degree, node_min, node_max)
-        widths[n] = dim
-        heights[n] = dim
-        if degree > min_label_degree:
-            labels[n] = n
-            font_sizes[n] = vcutils.linear_interp(degree, min_degree, max_degree, min_font_size, max_font_size)
+        try:
+            sequence_node = Gsub.node[n]['bipartite']
+        except KeyError:
+            sequence_node = False
+
+        if not sequence_node:
+            degree = float(Gsub.degree(n, weight='weight'))
+            r,g,b,a = cmap(vcutils.linear_interp(degree, min_degree, max_degree, 0.0, 1.0))
+            dim = vcutils.linear_interp(degree, min_degree, max_degree, node_min, node_max)
+            widths[n] = dim
+            heights[n] = dim
+            if degree > min_label_degree:
+                labels[n] = n
+                font_sizes[n] = vcutils.linear_interp(degree, min_degree, max_degree, min_font_size, max_font_size)
+            else:
+                labels[n] = ''
+            styles[n] = 'filled'
+            colors[n] = '#{r:02x}{g:02x}{b:02x}'.format(r=int(r*255.0), g=int(g*255.0), b=int(b*255.0))
+            node_line_widths[n] = vcutils.linear_interp(degree, min_degree, max_degree, node_line_min, node_line_max)
         else:
+            widths[n] = node_min
+            heights[n] = node_min
+            styles[n] = 'filled'
+            colors[n] = '#FFFFF'
+            node_line_widths[n] = 0.5
             labels[n] = ''
-        styles[n] = 'filled'
-        colors[n] = '#{r:02x}{g:02x}{b:02x}'.format(r=int(r*255.0), g=int(g*255.0), b=int(b*255.0))
-        node_line_widths[n] = vcutils.linear_interp(degree, min_degree, max_degree, node_line_min, node_line_max)
 
     nx.set_node_attributes(Gsub,'width',widths)
     nx.set_node_attributes(Gsub,'height',heights)
@@ -2361,22 +2455,55 @@ def plot_graph(graph_file, output_file, degree_cut=None, label_degree_cut=0.25, 
     nx.set_node_attributes(Gsub,'fontsize',font_sizes)
     #print G.edges(data=True)
     
-    weights = [ float(edata['weight']) for u,v,edata in Gsub.edges(data=True) ]
+    try:
+        weights = [ float(edata['weight']) for u,v,edata in Gsub.edges(data=True) ]
+    except KeyError:
+        weights = [ 1.0 for u,v in Gsub.edges() ]
     
     max_weight = float(max(weights))
     min_weight = float(min(weights))
     line_min = 0.1
     line_max = 5.0
+    arrow_min = 0.1
+    arrow_max = 0.7
+    alpha_min = 10.0
+    alpha_max = 255.0
+
+    # all of the scales will be at their max
+    if min_weight == max_weight:
+        min_weight = 0.0
+        line_max = 0.5
+        arrow_max = 0.1
+        alpha_max = 50.0
     
     edge_widths = {}
     arrow_sizes = {}
     edge_colors = {}
+
+    if sequence is not None:
+        sequence_parsed = []
+        for n,sid in enumerate(sequence):
+            if n < len(sequence) - 1:
+                sequence_parsed.append('{}-{}'.format(sid, sequence[n+1]))
+
     for e in nx.edges_iter(Gsub):
-        width = vcutils.linear_interp(float(Gsub[e[0]][e[1]]['weight']), min_weight, max_weight, line_min, line_max)
-        alpha = vcutils.linear_interp(float(Gsub[e[0]][e[1]]['weight']), min_weight, max_weight, 10.0, 255.0)
+        try:
+            e_weight = float(Gsub[e[0]][e[1]]['weight'])
+        except KeyError:
+            e_weight = 1.0
+
+        width = vcutils.linear_interp(e_weight, min_weight, max_weight, line_min, line_max)
+        arrow_size = vcutils.linear_interp(e_weight, min_weight, max_weight, arrow_min, arrow_max)
+        alpha = vcutils.linear_interp(e_weight, min_weight, max_weight, alpha_min, alpha_max)
         edge_widths[e] = width
-        arrow_sizes[e] = 0.1
-        edge_colors[e] = '#000000{:x}'.format(int(alpha))
+        arrow_sizes[e] = arrow_size
+        if sequence is not None:
+            if '{}-{}'.format(e[0], e[1]) in sequence_parsed:
+                edge_colors[e] = '#FF0000'
+            else:
+                edge_colors[e] = '#000000{:x}'.format(int(alpha))
+        else:
+            edge_colors[e] = '#000000{:x}'.format(int(alpha))
     
     nx.set_edge_attributes(Gsub, 'penwidth', edge_widths)
     nx.set_edge_attributes(Gsub, 'arrowsize', arrow_sizes)
@@ -2523,7 +2650,7 @@ def space_time_plot(sim_file, output_file=None, event_range=None, section_filter
 #-------------------------------------------------------------------------------
 # magnitude rupture area plot
 #-------------------------------------------------------------------------------
-def magnitude_rupture_area(sim_file, output_file, event_range=None, section_filter=None, magnitude_filter=None):
+def magnitude_rupture_area(sim_file, output_file=None, event_range=None, section_filter=None, magnitude_filter=None):
     #---------------------------------------------------------------------------
     # Instantiate the VCSimData class using the with statement. Then instantiate
     # VCEvents class from within the with block. This ensures that the sim data
@@ -2574,7 +2701,7 @@ def magnitude_rupture_area(sim_file, output_file, event_range=None, section_filt
 #-------------------------------------------------------------------------------
 # magnitude average slip plot
 #-------------------------------------------------------------------------------
-def magnitude_average_slip(sim_file, output_file, event_range=None, section_filter=None, magnitude_filter=None):
+def magnitude_average_slip(sim_file, output_file=None, event_range=None, section_filter=None, magnitude_filter=None):
     #---------------------------------------------------------------------------
     # Instantiate the VCSimData class using the with statement. Then instantiate
     # VCEvents class from within the with block. This ensures that the sim data
@@ -2622,7 +2749,7 @@ def magnitude_average_slip(sim_file, output_file, event_range=None, section_filt
 #-------------------------------------------------------------------------------
 # average slip surface rupture length plot
 #-------------------------------------------------------------------------------
-def average_slip_surface_rupture_length(sim_file, output_file, event_range=None, section_filter=None, magnitude_filter=None):
+def average_slip_surface_rupture_length(sim_file, output_file=None, event_range=None, section_filter=None, magnitude_filter=None):
     #---------------------------------------------------------------------------
     # Instantiate the VCSimData class using the with statement. Then instantiate
     # VCEvents class from within the with block. This ensures that the sim data
@@ -2673,7 +2800,7 @@ def average_slip_surface_rupture_length(sim_file, output_file, event_range=None,
 #-------------------------------------------------------------------------------
 # frequency magnitude plot
 #-------------------------------------------------------------------------------
-def frequency_magnitude(sim_file, output_file, event_range=None, section_filter=None, magnitude_filter=None):
+def frequency_magnitude(sim_file, output_file=None, event_range=None, section_filter=None, magnitude_filter=None):
     #---------------------------------------------------------------------------
     # Instantiate the VCSimData class using the with statement. Then instantiate
     # VCEvents class from within the with block. This ensures that the sim data
@@ -2733,3 +2860,104 @@ def frequency_magnitude(sim_file, output_file, event_range=None, section_filter=
         connect_points=True,
         legend_loc='upper right'
     )
+
+#-------------------------------------------------------------------------------
+# event return map
+#-------------------------------------------------------------------------------
+def event_return_map(sim_file, output_file=None, event_range=None, section_filter=None, magnitude_filter=None):
+    #---------------------------------------------------------------------------
+    # Instantiate the VCSimData class using the with statement. Then instantiate
+    # VCEvents class from within the with block. This ensures that the sim data
+    # file is closed when the with block ends.
+    #---------------------------------------------------------------------------
+    with VCSimData() as sim_data:
+        # open the simulation data file
+        sim_data.open_file(sim_file)
+        
+        # instantiate the vc classes passing in an instance of the VCSimData
+        # class
+        events = VCEvents(sim_data)
+        geometry = VCGeometry(sim_data)
+        
+        # get the data
+        event_data = events.get_event_data(['event_trigger', 'event_year', 'event_magnitude', 'event_number'], event_range=event_range, magnitude_filter=magnitude_filter, section_filter=section_filter)
+        
+        xs = []
+        ys = []
+        sections = set()
+        mags = []
+        max_mag_on_section = {}
+        
+        
+        # add edges and nodes to the graph for each event
+        for i, event_trigger in enumerate(event_data['event_trigger']):
+            if i%round(float(len(event_data['event_year']))/100.0) == 0:
+                sys.stdout.write('\r event {} of {}'.format(i, len(event_data['event_year'])))
+                sys.stdout.flush()
+            
+            this_sid = geometry.sections_with_elements([event_trigger])[0]
+            sections.add(this_sid)
+            if i < len(event_data['event_trigger']) - 1:
+                try:
+                    if event_data['event_magnitude'][i] > max_mag_on_section[this_sid]:
+                        max_mag_on_section[this_sid] = event_data['event_magnitude'][i]
+                except KeyError:
+                    max_mag_on_section[this_sid] = event_data['event_magnitude'][i]
+                
+                mags.append(max_mag_on_section[this_sid])
+                
+                next_sid = geometry.sections_with_elements([event_data['event_trigger'][i+1]])[0]
+                xs.append(this_sid)
+                ys.append(next_sid)
+    
+    labels = []
+
+    #print len(xs), len(ys), len(event_data['event_magnitude'][0:-1])
+    
+    for index in range(max(sections)):
+        if index + 1 in sections:
+            labels.append('{}'.format(index+1))
+        else:
+            labels.append('')
+    
+    # plot parameters
+    imw = 1024.0 # the full image width
+    imh = 1024.0
+    lm = 40.0
+    rm = 50.0
+    tm = 50.0
+    bm = 50.0
+    res = 72.0
+    ticklabelfont = mfont.FontProperties(family='Arial', style='normal', variant='normal', size=7)
+    
+    imwi = imw/res
+    imhi = imh/res
+    fig = mplt.figure(figsize=(imwi, imhi), dpi=res)
+    ph = imh - tm - bm # the height for both matricies
+    pw = imw - lm - rm
+    ax = fig.add_axes((lm/imw, bm/imh, pw/imw, ph/imh))
+
+    #ax.plot(time, output)
+    #ax.set_ylim((1, max(pos_sid)))
+    
+    norm = mcolor.Normalize(vmin=min(mags), vmax=max(mags))
+    cmap = mplt.get_cmap('YlOrRd')
+    
+    ax.scatter(xs,ys, c=cmap(norm(mags)), marker='s', linewidths=1, edgecolors=cmap(norm(mags)))
+    ax.set_xticks(range(max(sections)))
+    ax.set_yticks(range(max(sections)))
+    ax.set_xticklabels(labels)
+    ax.set_yticklabels(labels)
+    ax.axis('tight')
+
+    for label in ax.xaxis.get_ticklabels()+ax.yaxis.get_ticklabels():
+        label.set_fontproperties(ticklabelfont)
+    ax.set_ylim((0, max(sections)))
+    ax.set_xlim((0, max(sections)))
+
+
+
+
+
+
+
