@@ -64,7 +64,7 @@ class VCEvents(VCSys):
         else:
             return 'id', 0, self.num_events-1
 
-    def get_event_data_from_evnums(self, evnums, requested_data, event_data=None, event_range=None, magnitude_filter=None):
+    def get_event_data_from_evnums(self, evnums, requested_data, event_data=None, event_range=None, magnitude_filter=None, section_filter=None):
         
         return_event_data = False
         if event_data is None:
