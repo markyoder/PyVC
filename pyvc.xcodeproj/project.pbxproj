@@ -123,13 +123,13 @@
 				B8EFC34B17CFC629006B4107 /* vcsys.py */,
 				B8EFC34C17CFC6B1006B4107 /* vcgeometry.py */,
 				B8EFC34D17CFC785006B4107 /* vcevents.py */,
-				B8EFC34E17CFCDD2006B4107 /* __init__.py */,
-				B8EFC34F17CFD273006B4107 /* vcexceptions.py */,
-				B8EFC35017D10DDC006B4107 /* vcplots.py */,
-				B8EFC35117D12372006B4107 /* vcutils.py */,
-				B812F043180C607200BC7E6C /* vcanalysis.py */,
-				B82E3499184E7C0300CECB04 /* vcplotutils.py */,
 				B82E349A184E876600CECB04 /* vcsimdata.py */,
+				B8EFC34F17CFD273006B4107 /* vcexceptions.py */,
+				B8EFC34E17CFCDD2006B4107 /* __init__.py */,
+				B8EFC35017D10DDC006B4107 /* vcplots.py */,
+				B812F043180C607200BC7E6C /* vcanalysis.py */,
+				B8EFC35117D12372006B4107 /* vcutils.py */,
+				B82E3499184E7C0300CECB04 /* vcplotutils.py */,
 			);
 			path = pyvc;
 			sourceTree = "<group>";
