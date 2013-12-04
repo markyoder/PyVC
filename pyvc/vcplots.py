@@ -1,1072 +1,113 @@
 #!/usr/bin/env python
 from pyvc import *
 from pyvc import vcutils
+from pyvc import vcplotutils
 from pyvc import vcexceptions
+
 import matplotlib.pyplot as mplt
 import matplotlib.font_manager as mfont
 import matplotlib.colors as mcolor
 import matplotlib.colorbar as mcolorbar
 import matplotlib.lines as mlines
 import matplotlib.patches as mpatches
+from mpl_toolkits.basemap import Basemap
+
 import numpy as np
+
 import math
-import multiprocessing
-import Queue
 import cPickle
-
-import networkx as nx
-from networkx.algorithms import bipartite
-
-from operator import itemgetter
-from mpl_toolkits.basemap import Basemap, maskoceans, interp
-import quakelib
 import time
-from PIL import Image
+from operator import itemgetter
 import os
 import sys
 import gc
 import itertools
 import subprocess
 
-class VCFieldProcessor(multiprocessing.Process):
-    def __init__(self, work_queue, result_queue, field_1d, event_element_data, event_element_slips, lat_size, lon_size, cutoff, type='displacement'):#, min_lat, min_lon, max_lat, max_lon):
-        
-        # base class initialization
-        #multiprocessing.Process.__init__(self)
-        super(VCFieldProcessor,self).__init__()
- 
-        # job management stuff
-        self.work_queue = work_queue
-        self.result_queue = result_queue
-        self.kill_received = False
-        
-        self.type = type
-        self.field_1d = field_1d
-        self.event_element_data = event_element_data
-        self.event_element_slips = event_element_slips
-        self.lat_size = lat_size
-        self.lon_size = lon_size
-        self.cutoff = cutoff
-        #self.event_center = event_center
-        #self.event_radius = event_radius
-    
-        #self.counter = counter
-        #self.total_tasks = total_tasks
-    
-    def run(self):
-        while not self.kill_received:
-            # get a task
-            try:
-                start, end = self.work_queue.get_nowait()
-            except Queue.Empty:
-                break
-            
-            sys.stdout.write('{} - {}, '.format(start, end))
-            sys.stdout.flush()
-            #print 'processing elements {} - {}'.format(start, end)
-            
-            # create a element list
-            elements = quakelib.EventElementList()
-            
-            # create elements and add them to the element list
-            for element in self.event_element_data[start:end]:
-                #print element
-                ele = quakelib.EventElement4()
-                ele.set_rake(element['rake_rad'])
-                ele.set_slip(self.event_element_slips[element['block_id']])
-                ele.set_vert(0, element['m_x_pt1'], element['m_y_pt1'], element['m_z_pt1'])
-                ele.set_vert(1, element['m_x_pt2'], element['m_y_pt2'], element['m_z_pt2'])
-                ele.set_vert(2, element['m_x_pt3'], element['m_y_pt3'], element['m_z_pt3'])
-                ele.set_vert(3, element['m_x_pt4'], element['m_y_pt4'], element['m_z_pt4'])
-                elements.append(ele)
-            
-            # create an event
-            event = quakelib.Event()
-            
-            # add the elements to the event
-            event.add_elements(elements)
-            
-            # lame params
-            lame_lambda = 3.2e10
-            lame_mu = 3.0e10
-            
-            if self.type == 'displacement':
-                # calculate the displacements
-                if self.cutoff is None:
-                    disp_1d = event.event_displacements(self.field_1d, lame_lambda, lame_lambda)
-                else:
-                    disp_1d = event.event_displacements(self.field_1d, lame_lambda, lame_lambda, self.cutoff)
-                disp = np.array(disp_1d).reshape((self.lat_size,self.lon_size))
-                
-                # empty arrays to store the results
-                dX = np.empty((self.lat_size, self.lon_size))
-                dY = np.empty((self.lat_size, self.lon_size))
-                dZ = np.empty((self.lat_size, self.lon_size))
-                
-                it = np.nditer(dX, flags=['multi_index'])
-                while not it.finished:
-                    dX[it.multi_index] = disp[it.multi_index][0]
-                    dY[it.multi_index] = disp[it.multi_index][1]
-                    dZ[it.multi_index] = disp[it.multi_index][2]
-                    it.iternext()
-                
-                # store the result
-                processed_displacements = {}
-                processed_displacements['dX'] = dX
-                processed_displacements['dY'] = dY
-                processed_displacements['dZ'] = dZ
-                self.result_queue.put(processed_displacements)
-            elif self.type == 'gravity':
-                # calculate the gravity changes
-                if self.cutoff is None:
-                    dGrav_1d = event.event_gravity_changes(self.field_1d, lame_lambda, lame_lambda)
-                else:
-                    dGrav_1d = event.event_gravity_changes(self.field_1d, lame_lambda, lame_lambda, self.cutoff)
-                dGrav = np.array(dGrav_1d).reshape((self.lat_size,self.lon_size))
-                
-                # store the result
-                self.result_queue.put(dGrav)
+import networkx as nx
+from networkx.algorithms import bipartite
 
-#-------------------------------------------------------------------------------
-# Parent class for all of the field calculations
-#-------------------------------------------------------------------------------
-class VCField(object):
-    def __init__(self, min_lat, max_lat, min_lon, max_lon, base_lat, base_lon, padding, map_res, map_proj):
-        # These are constrained this way so we can plot on 1024x780 for the
-        # animations
-        max_map_width = 690.0
-        max_map_height = 658.0
-        
-        # A conversion instance for doing the lat-lon to x-y conversions
-        self.convert = quakelib.Conversion(base_lat, base_lon)
-        
-        # Calculate the lat-lon range based on the min-max and the padding
-        lon_range = max_lon - min_lon
-        lat_range = max_lat - min_lat
-        max_range = max((lon_range, lat_range))
-        self.min_lon = min_lon - lon_range*padding
-        self.min_lat = min_lat - lat_range*padding
-        self.max_lon = max_lon + lon_range*padding
-        self.max_lat = max_lat + lat_range*padding
-        
-        # We need a map instance to calculate the aspect ratio
-        map = Basemap(
-            llcrnrlon=self.min_lon,
-            llcrnrlat=self.min_lat,
-            urcrnrlon=self.max_lon,
-            urcrnrlat=self.max_lat,
-            lat_0=(self.max_lat+self.min_lat)/2.0,
-            lon_0=(self.max_lon+self.min_lon)/2.0,
-            resolution=map_res,
-            projection=map_proj,
-            suppress_ticks=True
-        )
+import quakelib
 
-        # Using the aspect ratio (h/w) to find the actual map width and height
-        # in pixels
-        if map.aspect > max_map_height/max_map_width:
-            map_height = max_map_height
-            map_width = max_map_height/map.aspect
-        else:
-            map_width = max_map_width
-            map_height = max_map_width*map.aspect
-        
-        #print map.aspect, map_width, map_height, max_map_height/max_map_width
-        
-        self.lons_1d = np.linspace(self.min_lon,self.max_lon,int(map_width))
-        self.lats_1d = np.linspace(self.min_lat,self.max_lat,int(map_height))
-        
-        _lons_1d = quakelib.FloatList()
-        _lats_1d = quakelib.FloatList()
-        
-        for lon in self.lons_1d:
-            _lons_1d.append(lon)
-        
-        for lat in self.lats_1d:
-            _lats_1d.append(lat)
-        
-        self.field_1d = self.convert.convertArray2xyz(_lats_1d,_lons_1d)
+'''
+import multiprocessing
+import Queue
+from PIL import Image
+from mpl_toolkits.basemap import Basemap, maskoceans, interp
+'''
 
-    def calculate_field_values(self, event_element_data, event_element_slips, cutoff, type='displacement'):
-        #-----------------------------------------------------------------------
-        # Break up the work and start the workers
-        #-----------------------------------------------------------------------
-        
-        # How many elements in the event
-        event_size = float(len(event_element_slips))
-        
-        # How many seperate CPUs do we have
-        num_processes = vcutils.available_cpu_count()
-        
-        sys.stdout.write('{} processors : '.format(num_processes))
-        
-        # Figure out how many segments we will break the task up into
-        seg = int(round(event_size/float(num_processes)))
-        if seg < 1:
-            seg = 1
-        
-        # Break up the job.
-        segmented_elements_indexes = []
-        if event_size < num_processes:
-            segments = int(event_size)
-        else:
-            segments = int(num_processes)
-        
-        for i in range(segments):
-            if i == num_processes - 1:
-                end_index = len(event_element_slips)
-            else:
-                end_index = seg*int(i + 1)
-            start_index = int(i) * seg
-            if start_index != end_index:
-                segmented_elements_indexes.append((start_index, end_index))
-        
-        # Add all of the jobs to a work queue
-        work_queue = multiprocessing.Queue()
-        for job in segmented_elements_indexes:
-            work_queue.put(job)
-        
-        # Create a queue to pass to workers to store the results
-        result_queue = multiprocessing.Queue()
-        
-        # Spawn workers
-        for i in range(len(segmented_elements_indexes)):
-            #print vcutils.available_cpu_count()
-            worker = VCFieldProcessor(work_queue,
-                result_queue,
-                self.field_1d,
-                event_element_data,
-                event_element_slips,
-                self.lats_1d.size,
-                self.lons_1d.size,
-                cutoff,
-                type=type
-            )
-            worker.start()
-        
-        # Collect the results off the queue
-        self.results = []
-        for i in range(len(segmented_elements_indexes)):
-            self.results.append(result_queue.get())
-
-        #sys.stdout.write('\033[30C\r')
-        #sys.stdout.flush()
-
-#-------------------------------------------------------------------------------
-# A class to handle calculating event gravity changes
-#-------------------------------------------------------------------------------
-class VCGravityField(VCField):
-    def __init__(self, min_lat, max_lat, min_lon, max_lon, base_lat, base_lon, padding=0.01, map_res='i', map_proj='cyl'):
-        
-        super(VCGravityField,self).__init__(min_lat, max_lat, min_lon, max_lon, base_lat, base_lon, padding, map_res, map_proj)
-        
-        # Define how the cutoff value scales if it is not explitly set
-        self.cutoff_min_size = 20.0
-        self.cutoff_min = 20.0
-        self.cutoff_p2_size = 65.0
-        self.cutoff_p2 = 90.0
-        
-        self.dG = None
-        self.dG_min = sys.float_info.max
-
+def plot_forecast(sim_file, output_file=None, event_range=None, section_filter=None, magnitude_filter=None):
     #---------------------------------------------------------------------------
-    # Sets up the gravity change calculation and then passes it to the
-    # VCFieldProcessor class.
+    # Get the data.
     #---------------------------------------------------------------------------
-    def calculate_field_values(self, event_element_data, event_element_slips, cutoff=None, save_file_prefix=None):
-        
-        #-----------------------------------------------------------------------
-        # If the cutoff is none (ie not explicitly set) calculate the cutoff for
-        # this event.
-        #-----------------------------------------------------------------------
-        event_size = float(len(event_element_slips))
-        if cutoff is None:
-            if  event_size >= self.cutoff_min_size:
-                cutoff = vcutils.linear_interp(
-                    event_size,
-                    self.cutoff_min_size,
-                    self.cutoff_p2_size,
-                    self.cutoff_min,
-                    self.cutoff_p2
-                    )
-            else:
-                cutoff = self.cutoff_min
-    
-        sys.stdout.write('{:0.2f} cutoff : '.format(cutoff))
-        sys.stdout.flush()
-        #-----------------------------------------------------------------------
-        # Run the field calculation. The results are stored in self.results
-        #-----------------------------------------------------------------------
-        super(VCGravityField,self).calculate_field_values(event_element_data, event_element_slips, cutoff, type='gravity')
-        
-        #-----------------------------------------------------------------------
-        # Combine the results
-        #-----------------------------------------------------------------------
-        for result in self.results:
-            '''
-            min = np.amin(np.fabs(result[result.nonzero()]))
-            if min < self.dG_min:
-                self.dG_min = min
-            '''
-            if self.dG is None:
-                self.dG = result
-            else:
-                self.dG += result
-        
-        #-----------------------------------------------------------------------
-        # If the save file is set then we need to combine the results to be
-        # saved. This is done seperately from above because self.dG is a
-        # cumulative result that could include contributions from multiple
-        # events. We only want to save the results of a single calculation.
-        #-----------------------------------------------------------------------
-        if save_file_prefix is not None:
-            dG = None
-            for result in self.results:
-                if dG is None:
-                    dG = result
-                else:
-                    dG += result
-            np.save('{}dG.npy'.format(save_file_prefix), dG)
+    with VCSimData() as sim_data:
+        # open the simulation data file
+        sim_data.open_file(sim_file)
+
+        # instantiate the vc classes passing in an instance of the VCSimData
+        # class
+        events = VCEvents(sim_data)
+        geometry = VCGeometry(sim_data)
+
+        event_data = events.get_event_data(['event_number', 'event_year', 'event_magnitude'], event_range=event_range, magnitude_filter=magnitude_filter, section_filter=section_filter)
+
+        min_lat = geometry.min_lat
+        max_lat = geometry.max_lat
+        min_lon = geometry.min_lon
+        max_lon = geometry.max_lon
+        base_lat = geometry.base_lat
+        base_lon = geometry.base_lon
+
+        fault_traces = geometry.get_fault_traces()
 
 
-    def init_field(self, value):
-        self.dG = np.empty((self.lats_1d.size, self.lons_1d.size))
-        self.dG.fill(value)
-
-    def load_field_values(self, file_prefix):
-        if self.dG is None:
-            self.init_field(0.0)
-        
-        try:
-            dG = np.load('{}dG.npy'.format(file_prefix))
-            
-            '''
-            min = np.amin(np.fabs(dG[dG.nonzero()]))
-            if min < self.dG_min:
-                self.dG_min = min
-            '''
-            
-            self.dG += dG
-            return True
-        except IOError:
-            return False
-    
-    def shrink_field(self, percentage):
-        self.dG *= percentage
-        #zeros = np.zeros(self.dG.shape)
-        #self.dG = np.where(self.dG >= self.dG_min, self.dG, zeros)
-    '''
-    def __imul__(self, value):
-        if self.dG is None:
-            self.init_field(0.0)
-        self.dG *= value
-
-        return self
-    '''
-
-#-------------------------------------------------------------------------------
-# A class to handle calculating event displacements
-#-------------------------------------------------------------------------------
-class VCDisplacementField(VCField):
-    def __init__(self, min_lat, max_lat, min_lon, max_lon, base_lat, base_lon, padding=0.01, map_res='i', map_proj='cyl'):
-        
-        super(VCDisplacementField,self).__init__(min_lat, max_lat, min_lon, max_lon, base_lat, base_lon, padding, map_res, map_proj)
-        
-        # Define how the cutoff value scales if it is not explitly set
-        self.cutoff_min_size = 20.0
-        self.cutoff_min = 46.5
-        self.cutoff_p2_size = 65.0
-        self.cutoff_p2 = 90.0
-    
-        self.dX = None
-        self.dY = None
-        self.dZ = None
-    
-        self.dX_min = sys.float_info.max
-        self.dY_min = sys.float_info.max
-        self.dZ_min = sys.float_info.max
+    intervals = np.array([   x - event_data['event_year'][n-1]
+                    for n,x in enumerate(event_data['event_year'])
+                    if n != 0
+                ])
     
     #---------------------------------------------------------------------------
-    # Sets up the displacement calculation and then passes it to the
-    # VCFieldProcessor class.
+    # t vs. P(t).
     #---------------------------------------------------------------------------
-    def calculate_field_values(self, event_element_data, event_element_slips, cutoff=None, save_file_prefix=None):
+    cumulative = {}
     
-        #-----------------------------------------------------------------------
-        # If the cutoff is none (ie not explicitly set) calculate the cutoff for
-        # this event.
-        #-----------------------------------------------------------------------
-        event_size = float(len(event_element_slips))
-        if cutoff is None:
-            if  event_size >= self.cutoff_min_size:
-                cutoff = vcutils.linear_interp(
-                    event_size,
-                    self.cutoff_min_size,
-                    self.cutoff_p2_size,
-                    self.cutoff_min,
-                    self.cutoff_p2
-                    )
-            else:
-                cutoff = self.cutoff_min
-        
-        #-----------------------------------------------------------------------
-        # Run the field calculation. The results are stored in self.results
-        #-----------------------------------------------------------------------
-        super(VCDisplacementField,self).calculate_field_values(event_element_data, event_element_slips, cutoff, type='displacement')
-        
-        #-----------------------------------------------------------------------
-        # Combine the results
-        #-----------------------------------------------------------------------
-        for result in self.results:
-            '''
-            min_x = np.amin(np.fabs(result['dX'][result['dX'].nonzero()]))
-            if min_x < self.dX_min:
-                self.dX_min = min_x
-            min_y = np.amin(np.fabs(result['dY'][result['dY'].nonzero()]))
-            if min_y < self.dY_min:
-                self.dY_min = min_y
-            min_z = np.amin(np.fabs(result['dZ'][result['dZ'].nonzero()]))
-            if min_z < self.dZ_min:
-                self.dZ_min = min_z
-            '''
-            if self.dX is None:
-                self.dX = result['dX']
-            else:
-                self.dX += result['dX']
-            
-            if self.dY is None:
-                self.dY = result['dY']
-            else:
-                self.dY += result['dY']
-                
-            if self.dZ is None:
-                self.dZ = result['dZ']
-            else:
-                self.dZ += result['dZ']
-        
-        #-----------------------------------------------------------------------
-        # If the save file is set then we need to combine the results to be
-        # saved. This is done seperately from above because self.dX etc. is a
-        # cumulative result that could include contributions from multiple
-        # events. We only want to save the results of a single calculation.
-        #-----------------------------------------------------------------------
-        if save_file_prefix is not None:
-            dX = None
-            dY = None
-            dZ = None
-            for result in self.results:
-                if dX is None:
-                    dX = result['dX']
-                else:
-                    dX += result['dX']
-                
-                if dY is None:
-                    dY = result['dY']
-                else:
-                    dY += result['dY']
-                    
-                if dZ is None:
-                    dZ = result['dZ']
-                else:
-                    dZ += result['dZ']
-
-            np.save('{}dX.npy'.format(save_file_prefix), dX)
-            np.save('{}dY.npy'.format(save_file_prefix), dY)
-            np.save('{}dZ.npy'.format(save_file_prefix), dZ)
-
-
-    def init_field(self, value):
-        self.dX = np.empty((self.lats_1d.size, self.lons_1d.size))
-        self.dY = np.empty((self.lats_1d.size, self.lons_1d.size))
-        self.dZ = np.empty((self.lats_1d.size, self.lons_1d.size))
-        
-        self.dX.fill(value)
-        self.dY.fill(value)
-        self.dZ.fill(value)
+    cumulative['x'] = np.sort(intervals)
+    cumulative['y'] = np.arange(float(intervals.size))/float(intervals.size)
+    #cumulative['y'] = [float(n)/float(len(intervals)) for n,x in enumerate(cumulative['x'])]
+    #mplt.plot(np.sort(intervals), [float(n)/float(len(intervals)) for n,x in enumerate(np.sort(intervals))])
     
-    def load_field_values(self, file_prefix):
-        if self.dX is None or self.dY is None or self.dZ is None:
-            self.init_field(0.0)
-        
-        try:
-            dX = np.load('{}dX.npy'.format(file_prefix))
-            dY = np.load('{}dY.npy'.format(file_prefix))
-            dZ = np.load('{}dZ.npy'.format(file_prefix))
-            '''
-            min_x = np.amin(np.fabs(dX[dX.nonzero()]))
-            if min_x < self.dX_min:
-                self.dX_min = min_x
-            min_y = np.amin(np.fabs(dY[dY.nonzero()]))
-            if min_y < self.dY_min:
-                self.dY_min = min_y
-            min_z = np.amin(np.fabs(dZ[dZ.nonzero()]))
-            if min_z < self.dZ_min:
-                self.dZ_min = min_z
-            '''
-            self.dX += dX
-            self.dY += dY
-            self.dZ += dZ
-            
-            return True
-        except IOError:
-            return False
+    #---------------------------------------------------------------------------
+    # t0 vs. P(t0 + dt, t0) for fixed dt.
+    #---------------------------------------------------------------------------
+    dt = 30
     
-    def shrink_field(self, percentage):
-        if self.dX is None or self.dY is None or self.dZ is None:
-            self.init_field(0.0)
-        
-        self.dX *= percentage
-        self.dY *= percentage
-        self.dZ *= percentage
-        
-        #print percentage, self.dX_min, self.dY_min, self.dZ_min
-        '''
-        zeros = np.zeros(self.dX.shape)
-        self.dX = np.where(self.dX >= self.dX_min, self.dX, zeros)
-        self.dY = np.where(self.dY >= self.dY_min, self.dY, zeros)
-        self.dZ = np.where(self.dZ >= self.dZ_min, self.dZ, zeros)
-        '''
+    conditional_dt_fixed = {'x':[],'y':[]}
     
-    '''
-    def __imul__(self, value):
-        if self.dX is None or self.dY is None or self.dZ is None:
-            self.init_field(0.0)
-        self.dX *= value
-        self.dY *= value
-        self.dZ *= value
-
-        return self
-    '''
-
-
-class VCDisplacementFieldPlotter(object):
-    def __init__(self, min_lat, max_lat, min_lon, max_lon, map_res='i', map_proj='cyl'):
-        self.look_azimuth = None
-        self.look_elevation = None
-        self.wavelength = 0.03
+    for t0 in np.sort(intervals):
+        int_t0_dt = intervals[np.where( intervals > t0+dt)]
+        int_t0 = intervals[np.where( intervals > t0)]
         
-        self.norm = None
-        
-        #-----------------------------------------------------------------------
-        # DisplacementmMap configuration
-        #-----------------------------------------------------------------------
-        # values for the fringes map are denoted by a {value}_f
-        self.dmc = {
-            'font':               mfont.FontProperties(family='Arial', style='normal', variant='normal', weight='normal'),
-            'font_bold':          mfont.FontProperties(family='Arial', style='normal', variant='normal', weight='bold'),
-            'cmap':               mplt.get_cmap('YlOrRd'),
-            'cmap_f':             mplt.get_cmap('jet'),
-        #water
-            'water_color':          '#4eacf4',
-            'water_color_f':        '#4eacf4',
-        #map boundaries
-            'boundary_color':       '#000000',
-            'boundary_color_f':     '#ffffff',
-            'boundary_width':       1.0,
-            'coastline_color':      '#000000',
-            'coastline_color_f':    '#ffffff',
-            'coastline_width':      1.0,
-            'country_color':        '#000000',
-            'country_color_f':      '#ffffff',
-            'country_width':        1.0,
-            'state_color':          '#000000',
-            'state_color_f':        '#ffffff',
-            'state_width':          1.0,
-        #rivers
-            'river_width':          0.25,
-        #faults
-            'fault_color':          '#000000',
-            'fault_color_f':        '#ffffff',
-            'event_fault_color':    '#ff0000',
-            'event_fault_color_f':  '#ffffff',
-            'fault_width':          0.5,
-        #lat lon grid
-            'grid_color':           '#000000',
-            'grid_color_f':         '#ffffff',
-            'grid_width':           0.0,
-            'num_grid_lines':       5,
-        #map props
-            'map_resolution':       map_res,
-            'map_projection':       map_proj,
-            'plot_resolution':      72.0,
-            'map_tick_color':       '#000000',
-            'map_tick_color_f':     '#000000',
-            'map_frame_color':      '#000000',
-            'map_frame_color_f':    '#000000',
-            'map_frame_width':      1,
-            'map_fontsize':         12,
-            'arrow_inset':          10.0,
-            'arrow_fontsize':       9.0,
-            'cb_fontsize':          10.0,
-            'cb_fontcolor':         '#000000',
-            'cb_fontcolor_f':       '#000000',
-            'cb_height':            20.0,
-            'cb_margin_t':          10.0
-        }
-        
-        #-----------------------------------------------------------------------
-        # m1, fig1 is the oceans and the continents. This will lie behind the
-        # masked data image.
-        #-----------------------------------------------------------------------
-        self.m1 = Basemap(
-            llcrnrlon=min_lon,
-            llcrnrlat=min_lat,
-            urcrnrlon=max_lon,
-            urcrnrlat=max_lat,
-            lat_0=(max_lat+min_lat)/2.0,
-            lon_0=(max_lon+min_lon)/2.0,
-            resolution=map_res,
-            projection=map_proj,
-            suppress_ticks=True
-        )
-        #-----------------------------------------------------------------------
-        # m2, fig2 is the plotted deformation data.
-        #-----------------------------------------------------------------------
-        self.m2 = Basemap(
-            llcrnrlon=min_lon,
-            llcrnrlat=min_lat,
-            urcrnrlon=max_lon,
-            urcrnrlat=max_lat,
-            lat_0=(max_lat+min_lat)/2.0,
-            lon_0=(max_lon+min_lon)/2.0,
-            resolution=map_res,
-            projection=map_proj,
-            suppress_ticks=True
-        )
-        #-----------------------------------------------------------------------
-        # m3, fig3 is the ocean land mask.
-        #-----------------------------------------------------------------------
-        self.m3 = Basemap(
-            llcrnrlon=min_lon,
-            llcrnrlat=min_lat,
-            urcrnrlon=max_lon,
-            urcrnrlat=max_lat,
-            lat_0=(max_lat+min_lat)/2.0,
-            lon_0=(max_lon+min_lon)/2.0,
-            resolution=map_res,
-            projection=map_proj,
-            suppress_ticks=True
-        )
-            
-    def set_field(self, field):
-        self.lons_1d = field.lons_1d
-        self.lats_1d = field.lats_1d
-        self.dX = field.dX
-        self.dY = field.dY
-        self.dZ = field.dZ
-
+        if int_t0.size != 0:
+            conditional_dt_fixed['x'].append(t0)
+            conditional_dt_fixed['y'].append(1.0 - float(int_t0_dt.size)/float(int_t0.size))
 
     #---------------------------------------------------------------------------
-    # Returns a PIL image of the masked displacement map using the current
-    # values of the displacements. This map can then be combined into a still
-    # or used as part of an animation.
+    # t = t0 + dt vs. P(t, t0) for various t0.
     #---------------------------------------------------------------------------
-    def create_field_image(self, fringes=True):
-        
-        #-----------------------------------------------------------------------
-        # Set all of the plotting properties
-        #-----------------------------------------------------------------------
-    
-        # properties that are fringes dependent
-        if fringes:
-            cmap            = self.dmc['cmap_f']
-            water_color     = self.dmc['water_color_f']
-            boundary_color  = self.dmc['boundary_color_f']
-        else:
-            cmap            = self.dmc['cmap']
-            water_color     = self.dmc['water_color']
-            boundary_color  = self.dmc['boundary_color']
-            
-        # properties that are not fringes dependent
-        land_color      = cmap(0)
-        plot_resolution = self.dmc['plot_resolution']
-        
-        #-----------------------------------------------------------------------
-        # Set the map dimensions
-        #-----------------------------------------------------------------------
-        mw = self.lons_1d.size
-        mh = self.lats_1d.size
-        mwi = mw/plot_resolution
-        mhi = mh/plot_resolution
-        
-        #print mw, mh
-        
-        #-----------------------------------------------------------------------
-        # Fig1 is the background land and ocean.
-        #-----------------------------------------------------------------------
-        fig1 = mplt.figure(figsize=(mwi, mhi), dpi=plot_resolution)
-        self.m1.ax = fig1.add_axes((0,0,1,1))
-        self.m1.drawmapboundary(
-            color=boundary_color,
-            linewidth=0,
-            fill_color=water_color
-        )
-        self.m1.fillcontinents(
-            color=land_color,
-            lake_color=water_color
-        )
-        #-----------------------------------------------------------------------
-        # Fig2 is the deformations.
-        #-----------------------------------------------------------------------
-        fig2 = mplt.figure(figsize=(mwi, mhi), dpi=plot_resolution)
-        self.m2.ax = fig2.add_axes((0,0,1,1))
-        
-        if self.look_azimuth is None:
-            self.look_azimuth = 0.0
-        if self.look_elevation is None:
-            self.look_elevation = 0.0
-        
-        dMags = -self.dX * math.sin(self.look_azimuth) * math.cos(self.look_elevation) - self.dY * math.cos(self.look_azimuth) * math.cos(self.look_elevation) + self.dZ * math.sin(self.look_elevation)
-        
-        
-        # make sure the values are located at the correct location on the map
-        dMags_transformed = self.m2.transform_scalar(dMags, self.lons_1d, self.lats_1d, self.lons_1d.size, self.lats_1d.size)
-        
-        # prepare the colors for the plot and do the plot
-        if fringes:
-            dMags_colors = np.empty((dMags_transformed.shape[0],dMags_transformed.shape[1],4))
-            r,g,b,a = cmap(0)
-            dMags_colors[:,:,0].fill(r)
-            dMags_colors[:,:,1].fill(g)
-            dMags_colors[:,:,2].fill(b)
-            dMags_colors[:,:,3].fill(a)
-            non_zeros = dMags_transformed.nonzero()
-            for n,i in enumerate(non_zeros[0]):
-                j = non_zeros[1][n]
-                r,g,b,a = cmap(math.modf(abs(dMags_transformed[i,j])/self.wavelength)[0])
-                dMags_colors[i, j, 0] = r
-                dMags_colors[i, j, 1] = g
-                dMags_colors[i, j, 2] = b
-                dMags_colors[i, j, 3] = a
-            if self.norm is None:
-                self.norm = mcolor.Normalize(vmin=0, vmax=self.wavelength)
-            im = self.m2.imshow(dMags_colors, interpolation='spline36')
-        else:
-            dMags_colors = np.empty(dMags_transformed.shape)
-            non_zeros = dMags_transformed.nonzero()
-            #vmin = np.amin(np.fabs(dMags_transformed[non_zeros]))
-            dMags_colors.fill(5e-4)
-            dMags_colors[non_zeros] = np.fabs(dMags_transformed[non_zeros])
-            vmax = np.amax(dMags_colors)
-            if vmax <= 1:
-                mod_vmax = 1
-            elif vmax > 1 and vmax <= 10:
-                mod_vmax = 10
-            elif vmax > 10 and vmax <= 100:
-                mod_vmax = 100
-            elif vmax > 100 and vmax <= 1000:
-                mod_vmax = 1000
-            elif vmax > 1000:
-                mod_vmax = 1000
-            if self.norm is None:
-                self.norm = mcolor.LogNorm(vmin=5e-4, vmax=mod_vmax, clip=True)
-            im = self.m2.imshow(dMags_colors, cmap=cmap, norm=self.norm)
-        
-        #-----------------------------------------------------------------------
-        # Fig3 is the land/sea mask.
-        #-----------------------------------------------------------------------
-        fig3 = mplt.figure(figsize=(mwi, mhi), dpi=plot_resolution)
-        self.m3.ax = fig3.add_axes((0,0,1,1))
-        self.m3.fillcontinents(color='#000000', lake_color='#ffffff')
-        
-        #-----------------------------------------------------------------------
-        # Composite fig 1 - 3 together
-        #-----------------------------------------------------------------------
-        # FIGURE 1 draw the renderer
-        fig1.canvas.draw()
-        
-        # FIGURE 1 Get the RGBA buffer from the figure
-        w,h = fig1.canvas.get_width_height()
-        buf = np.fromstring ( fig1.canvas.tostring_argb(), dtype=np.uint8 )
-        buf.shape = ( w, h,4 )
-     
-        # FIGURE 1 canvas.tostring_argb give pixmap in ARGB mode. Roll the ALPHA channel to have it in RGBA mode
-        buf = np.roll ( buf, 3, axis = 2 )
-        im1 = Image.fromstring( "RGBA", ( w ,h ), buf.tostring( ) )
-        
-        # FIGURE 2 draw the renderer
-        fig2.canvas.draw()
-        
-        # FIGURE 2 Get the RGBA buffer from the figure
-        w,h = fig2.canvas.get_width_height()
-        buf = np.fromstring ( fig2.canvas.tostring_argb(), dtype=np.uint8 )
-        buf.shape = ( w, h,4 )
-     
-        # FIGURE 2 canvas.tostring_argb give pixmap in ARGB mode. Roll the ALPHA channel to have it in RGBA mode
-        buf = np.roll ( buf, 3, axis = 2 )
-        im2 = Image.fromstring( "RGBA", ( w ,h ), buf.tostring( ) )
-        
-        # FIGURE 3 draw the renderer
-        fig3.canvas.draw()
-        
-        # FIGURE 3 Get the RGBA buffer from the figure
-        w,h = fig3.canvas.get_width_height()
-        buf = np.fromstring ( fig3.canvas.tostring_argb(), dtype=np.uint8 )
-        buf.shape = ( w, h,4 )
-     
-        # FIGURE 3 canvas.tostring_argb give pixmap in ARGB mode. Roll the ALPHA channel to have it in RGBA mode
-        buf = np.roll ( buf, 3, axis = 2 )
-        im3 = Image.fromstring( "RGBA", ( w ,h ), buf.tostring( ) )
-        
-        mask = im3.convert('L')
-        
-        # Clear all three figures
-        fig1.clf()
-        fig2.clf()
-        fig3.clf()
-        mplt.close('all')
-        gc.collect()
-        
-        # The final composited image.
-        return  Image.composite(im1, im2, mask)
+    conditional = {}
 
-    #---------------------------------------------------------------------------
-    # Calculates the look angles based on a set of elements. This will set the
-    # angles to be looking along the average strike of the fault.
-    #---------------------------------------------------------------------------
-    def calculate_look_angles(self, element_data):
-        strikes = []
-        rakes = []
-        
-        for element in element_data:
-            ele = quakelib.Element4()
-            ele.set_vert(0, element['m_x_pt1'], element['m_y_pt1'], element['m_z_pt1'])
-            ele.set_vert(1, element['m_x_pt2'], element['m_y_pt2'], element['m_z_pt2'])
-            ele.set_vert(2, element['m_x_pt3'], element['m_y_pt3'], element['m_z_pt3'])
-            ele.set_vert(3, element['m_x_pt4'], element['m_y_pt4'], element['m_z_pt4'])
-            strikes.append(ele.strike())
-            rakes.append(element['rake_rad'])
-        
-        self.look_azimuth = -sum(strikes)/len(strikes)
-        
-        average_rake = sum(rakes)/len(rakes)
-        if average_rake >= math.pi/2.0:
-            average_rake = math.pi - average_rake
-        self.look_elevation = abs(average_rake)
+    for t0 in range(0,175,25):
+        conditional[t0] = {'x':[],'y':[]}
+        int_t0 = intervals[np.where( intervals > t0)]
+        if int_t0.size != 0:
+            for dt in range(250):
+                int_t0_dt = intervals[np.where( intervals > t0+dt)]
+                conditional[t0]['x'].append(t0+dt)
+                conditional[t0]['y'].append(1.0 - float(int_t0_dt.size)/float(int_t0.size))
 
-class VCGravityFieldPlotter(object):
-    def __init__(self, min_lat, max_lat, min_lon, max_lon, map_res='i', map_proj='cyl'):
-        
-        self.norm = None
-        
-        #-----------------------------------------------------------------------
-        # Gravity map configuration
-        #-----------------------------------------------------------------------
-        self.dmc = {
-            'font':               mfont.FontProperties(family='Arial', style='normal', variant='normal', weight='normal'),
-            'font_bold':          mfont.FontProperties(family='Arial', style='normal', variant='normal', weight='bold'),
-            'cmap':               mplt.get_cmap('seismic'),
-        #water
-            'water_color':          '#4eacf4',
-        #map boundaries
-            'boundary_color':       '#000000',
-            'boundary_width':       1.0,
-            'coastline_color':      '#000000',
-            'coastline_width':      1.0,
-            'country_color':        '#000000',
-            'country_width':        1.0,
-            'state_color':          '#000000',
-            'state_width':          1.0,
-        #rivers
-            'river_width':          0.25,
-        #faults
-            'fault_color':          '#000000',
-            'event_fault_color':    '#ff0000',
-            'fault_width':          0.5,
-        #lat lon grid
-            'grid_color':           '#000000',
-            'grid_width':           0.0,
-            'num_grid_lines':       5,
-        #map props
-            'map_resolution':       map_res,
-            'map_projection':       map_proj,
-            'plot_resolution':      72.0,
-            'map_tick_color':       '#000000',
-            'map_frame_color':      '#000000',
-            'map_frame_width':      1,
-            'map_fontsize':         12,
-            'arrow_inset':          10.0,
-            'arrow_fontsize':       9.0,
-            'cb_fontsize':          10.0,
-            'cb_fontcolor':         '#000000',
-            'cb_height':            20.0,
-            'cb_margin_t':          10.0,
-         #min/max gravity change labels for colorbar (in microgals)
-            'cbar_min':             -20,
-            'cbar_max':             20
-        }
-        
-        #-----------------------------------------------------------------------
-        # m1, fig1 is the oceans and the continents. This will lie behind the
-        # masked data image.
-        #-----------------------------------------------------------------------
-        self.m1 = Basemap(
-            llcrnrlon=min_lon,
-            llcrnrlat=min_lat,
-            urcrnrlon=max_lon,
-            urcrnrlat=max_lat,
-            lat_0=(max_lat+min_lat)/2.0,
-            lon_0=(max_lon+min_lon)/2.0,
-            resolution=map_res,
-            projection=map_proj,
-            suppress_ticks=True
-        )
-        #-----------------------------------------------------------------------
-        # m2, fig2 is the plotted deformation data.
-        #-----------------------------------------------------------------------
-        self.m2 = Basemap(
-            llcrnrlon=min_lon,
-            llcrnrlat=min_lat,
-            urcrnrlon=max_lon,
-            urcrnrlat=max_lat,
-            lat_0=(max_lat+min_lat)/2.0,
-            lon_0=(max_lon+min_lon)/2.0,
-            resolution=map_res,
-            projection=map_proj,
-            suppress_ticks=True
-        )
-        #-----------------------------------------------------------------------
-        # m3, fig3 is the ocean land mask.
-        #-----------------------------------------------------------------------
-        self.m3 = Basemap(
-            llcrnrlon=min_lon,
-            llcrnrlat=min_lat,
-            urcrnrlon=max_lon,
-            urcrnrlat=max_lat,
-            lat_0=(max_lat+min_lat)/2.0,
-            lon_0=(max_lon+min_lon)/2.0,
-            resolution=map_res,
-            projection=map_proj,
-            suppress_ticks=True
-        )
+        mplt.plot(conditional[t0]['x'],conditional[t0]['y'])
 
-    def set_field(self, field):
-        self.lons_1d = field.lons_1d
-        self.lats_1d = field.lats_1d
-        self.dG = field.dG
 
-    #---------------------------------------------------------------------------
-    # Returns a PIL image of the masked displacement map using the current
-    # values of the displacements. This map can then be combined into a still
-    # or used as part of an animation.
-    #---------------------------------------------------------------------------
-    def create_field_image(self, fringes=True):
-        
-        #-----------------------------------------------------------------------
-        # Set all of the plotting properties
-        #-----------------------------------------------------------------------
-    
-        cmap            = self.dmc['cmap']
-        water_color     = self.dmc['water_color']
-        boundary_color  = self.dmc['boundary_color']
-        land_color      = cmap(0.5)
-        plot_resolution = self.dmc['plot_resolution']
-        
-        #-----------------------------------------------------------------------
-        # Set the map dimensions
-        #-----------------------------------------------------------------------
-        mw = self.lons_1d.size
-        mh = self.lats_1d.size
-        mwi = mw/plot_resolution
-        mhi = mh/plot_resolution
-        
-        #-----------------------------------------------------------------------
-        # Fig1 is the background land and ocean.
-        #-----------------------------------------------------------------------
-        fig1 = mplt.figure(figsize=(mwi, mhi), dpi=plot_resolution)
-        self.m1.ax = fig1.add_axes((0,0,1,1))
-        self.m1.drawmapboundary(
-            color=boundary_color,
-            linewidth=0,
-            fill_color=water_color
-        )
-        self.m1.fillcontinents(
-            color=land_color,
-            lake_color=water_color
-        )
-        #-----------------------------------------------------------------------
-        # Fig2 is the deformations.
-        #-----------------------------------------------------------------------
-        fig2 = mplt.figure(figsize=(mwi, mhi), dpi=plot_resolution)
-        self.m2.ax = fig2.add_axes((0,0,1,1))
-        
-        # make sure the values are located at the correct location on the map
-        dG_transformed = self.m2.transform_scalar(self.dG, self.lons_1d, self.lats_1d, self.lons_1d.size, self.lats_1d.size)
-        
-        if self.norm is None:
-            #self.norm = mcolor.Normalize(vmin=np.amin(dG_transformed), vmax=np.amax(dG_transformed))
-            # Changed units to microgals (multiply MKS unit by 10^8)
-            self.norm = mcolor.Normalize(vmin=self.dmc['cbar_min'], vmax=self.dmc['cbar_max'])
-        
-        #self.m2.imshow(dG_transformed, cmap=cmap, norm=self.norm)
-        # Changed units to microgals (multiply MKS unit by 10^8)
-        self.m2.imshow(dG_transformed*float(pow(10,8)), cmap=cmap, norm=self.norm)
-        
-        #-----------------------------------------------------------------------
-        # Fig3 is the land/sea mask.
-        #-----------------------------------------------------------------------
-        """fig3 = mplt.figure(figsize=(mwi, mhi), dpi=plot_resolution)
-        self.m3.ax = fig3.add_axes((0,0,1,1))
-        #self.m3.fillcontinents(color='#000000', lake_color='#ffffff')
-        dG_abs = np.fabs(dG_transformed)
-        #print np.amin(dG_abs), np.amax(dG_abs), 1e6*np.amin(dG_abs), np.amax(dG_abs)*1e-1
-        im = self.m3.imshow(dG_abs, cmap=mplt.get_cmap('gray_r'), norm=mcolor.Normalize(vmin=1e6*np.amin(dG_abs), vmax=np.amax(dG_abs)*1e-1, clip=True))
-        
-        fig3.savefig('local/test_mask.png', format='png', dpi=plot_resolution)
-        """
-        #-----------------------------------------------------------------------
-        # Composite fig 1 - 3 together
-        #-----------------------------------------------------------------------
-        # FIGURE 1 draw the renderer
-        fig1.canvas.draw()
-        
-        # FIGURE 1 Get the RGBA buffer from the figure
-        w,h = fig1.canvas.get_width_height()
-        buf = np.fromstring ( fig1.canvas.tostring_argb(), dtype=np.uint8 )
-        buf.shape = ( w, h,4 )
-     
-        # FIGURE 1 canvas.tostring_argb give pixmap in ARGB mode. Roll the ALPHA channel to have it in RGBA mode
-        buf = np.roll ( buf, 3, axis = 2 )
-        im1 = Image.fromstring( "RGBA", ( w ,h ), buf.tostring( ) )
-        
-        # FIGURE 2 draw the renderer
-        fig2.canvas.draw()
-        
-        # FIGURE 2 Get the RGBA buffer from the figure
-        w,h = fig2.canvas.get_width_height()
-        buf = np.fromstring ( fig2.canvas.tostring_argb(), dtype=np.uint8 )
-        buf.shape = ( w, h,4 )
-     
-        # FIGURE 2 canvas.tostring_argb give pixmap in ARGB mode. Roll the ALPHA channel to have it in RGBA mode
-        buf = np.roll ( buf, 3, axis = 2 )
-        im2 = Image.fromstring( "RGBA", ( w ,h ), buf.tostring( ) )
-        
-        # FIGURE 3 draw the renderer
-        """fig3.canvas.draw()
-        
-        # FIGURE 3 Get the RGBA buffer from the figure
-        w,h = fig3.canvas.get_width_height()
-        buf = np.fromstring ( fig3.canvas.tostring_argb(), dtype=np.uint8 )
-        buf.shape = ( w, h,4 )
-     
-        # FIGURE 3 canvas.tostring_argb give pixmap in ARGB mode. Roll the ALPHA channel to have it in RGBA mode
-        buf = np.roll ( buf, 3, axis = 2 )
-        im3 = Image.fromstring( "RGBA", ( w ,h ), buf.tostring( ) )
-        
-        mask = im3.convert('L')
-        """
-        
-        # Clear all three figures
-        fig1.clf()
-        fig2.clf()
-        #fig3.clf()
-        mplt.close('all')
-        gc.collect()
-        
-        #mask = Image.new("L", (w,h), 'black')
-        # The final composited image.
-        #return  Image.composite(im1, im2, mask)
-        return im2
 
 #-------------------------------------------------------------------------------
 # event field animation
@@ -1139,12 +180,12 @@ def event_field_animation(sim_file, output_directory, event_range,
         
         # Instantiate the field and the plotter
         if field_type == 'displacement':
-            EF = VCDisplacementField(min_lat, max_lat, min_lon, max_lon, base_lat, base_lon, padding=padding)
-            EFP = VCDisplacementFieldPlotter(EF.min_lat, EF.max_lat, EF.min_lon, EF.max_lon)
+            EF = vcutils.VCDisplacementField(min_lat, max_lat, min_lon, max_lon, base_lat, base_lon, padding=padding)
+            EFP = vcplotutils.VCDisplacementFieldPlotter(EF.min_lat, EF.max_lat, EF.min_lon, EF.max_lon)
             EFP.calculate_look_angles(geometry[:])
         elif field_type == 'gravity':
-            EF = VCGravityField(min_lat, max_lat, min_lon, max_lon, base_lat, base_lon, padding=padding)
-            EFP = VCGravityFieldPlotter(EF.min_lat, EF.max_lat, EF.min_lon, EF.max_lon)
+            EF = vcutils.VCGravityField(min_lat, max_lat, min_lon, max_lon, base_lat, base_lon, padding=padding)
+            EFP = vcplotutils.VCGravityFieldPlotter(EF.min_lat, EF.max_lat, EF.min_lon, EF.max_lon)
 
         #-----------------------------------------------------------------------
         # Find the biggest event and normalize based on these values.
@@ -1792,7 +833,6 @@ def event_field_animation(sim_file, output_directory, event_range,
         proc = subprocess.Popen(proc_args, shell=True)
         proc.wait()
 
-
 #-------------------------------------------------------------------------------
 # plots event fields
 #-------------------------------------------------------------------------------
@@ -1834,9 +874,9 @@ def plot_event_field(sim_file, evnum, output_file=None, field_type='displacement
     sys.stdout.flush()
     
     if field_type == 'displacement':
-        EF = VCDisplacementField(min_lat, max_lat, min_lon, max_lon, base_lat, base_lon, padding=padding)
+        EF = vcutils.VCDisplacementField(min_lat, max_lat, min_lon, max_lon, base_lat, base_lon, padding=padding)
     elif field_type == 'gravity':
-        EF = VCGravityField(min_lat, max_lat, min_lon, max_lon, base_lat, base_lon, padding=padding)
+        EF = vcutils.VCGravityField(min_lat, max_lat, min_lon, max_lon, base_lat, base_lon, padding=padding)
 
     sys.stdout.write('done\n')
     sys.stdout.flush()
@@ -1878,9 +918,9 @@ def plot_event_field(sim_file, evnum, output_file=None, field_type='displacement
     sys.stdout.flush()
 
     if field_type == 'displacement':
-        EFP = VCDisplacementFieldPlotter(EF.min_lat, EF.max_lat, EF.min_lon, EF.max_lon)
+        EFP = vcplotutils.VCDisplacementFieldPlotter(EF.min_lat, EF.max_lat, EF.min_lon, EF.max_lon)
     elif field_type == 'gravity':
-        EFP = VCGravityFieldPlotter(EF.min_lat, EF.max_lat, EF.min_lon, EF.max_lon)
+        EFP = vcplotutils.VCGravityFieldPlotter(EF.min_lat, EF.max_lat, EF.min_lon, EF.max_lon)
     EFP.set_field(EF)
 
     if field_type == 'displacement':
@@ -2237,9 +1277,9 @@ def plot_recurrence_intervals(sim_file, output_file=None, event_range=None, sect
             fig.savefig(output_file, format=plot_format, dpi=res)
 
 #-------------------------------------------------------------------------------
-# plots a matrix of an event graph
+# plots a matrix of a bipartite event sequence graph
 #-------------------------------------------------------------------------------
-def plot_bipartate_graph_matrix(graph_file, output_file=None):
+def plot_bipartite_graph_matrix(graph_file, output_file=None):
     G = cPickle.load(open(graph_file, 'rb'))
     
     top_nodes = set(n for n,d in G.nodes(data=True) if d['bipartite']==0)
@@ -2586,6 +1626,7 @@ def space_time_plot(sim_file, output_file=None, event_range=None, section_filter
         #-----------------------------------------------------------------------
         # TODO: Figure out a way to plot in parallel.
         if mp:
+            '''
             num_processes = multiprocessing.cpu_count()
         
             # break the work up
@@ -2614,6 +1655,7 @@ def space_time_plot(sim_file, output_file=None, event_range=None, section_filter
             # collect the results off the queue
             for i in range(num_processes):
                 stp.event_lines += result_queue.get().event_lines
+            '''
         else:
             # For each event in the found event set, look at the involved
             # elements, and add them to the event line array. Since the event
