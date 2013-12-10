@@ -432,6 +432,8 @@ class VCField(object):
         # animations
         max_map_width = 690.0
         max_map_height = 658.0
+        #max_map_width = 309.0
+        #max_map_height = 309.0
         
         # A conversion instance for doing the lat-lon to x-y conversions
         self.convert = quakelib.Conversion(base_lat, base_lon)
@@ -704,7 +706,9 @@ class VCDisplacementField(VCField):
                     )
             else:
                 cutoff = self.cutoff_min
-        
+    
+        sys.stdout.write('{:0.2f} cutoff : '.format(cutoff))
+        sys.stdout.flush()
         #-----------------------------------------------------------------------
         # Run the field calculation. The results are stored in self.results
         #-----------------------------------------------------------------------

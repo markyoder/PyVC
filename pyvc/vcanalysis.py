@@ -110,7 +110,7 @@ def graph_events(sim_file, output_file, triggers_only=False, event_range=None, s
             event_data = events.get_event_data(['event_elements', 'event_year', 'event_magnitude', 'event_number'], event_range=event_range, magnitude_filter=magnitude_filter, section_filter=section_filter)
         
         # initilize a graph
-        G = nx.DiGraph(sim_file=sim_file, event_range=None, section_filter=None, magnitude_filter=None)
+        G = nx.DiGraph(name='Event graph for {}'.format(sim_file), sim_file=sim_file, event_range=None, section_filter=None, magnitude_filter=None)
         
         sys.stdout.write('{} events : {} years\n'.format(len(event_data['event_year']),event_data['event_year'][-1] - event_data['event_year'][0] ))
         sys.stdout.flush()
@@ -184,7 +184,7 @@ def analyze_event_sequence_graph(graph_file):
     print sorted_seq[0][0]
 
 
-def graph_event_sequences(sim_file, output_file, sequence_length=3, event_range=None, section_filter=None, magnitude_filter=None):
+def graph_event_sequences(sim_file, output_file, sequence_length=5, event_range=None, section_filter=None, magnitude_filter=None):
     
     sys.stdout.write('Initializing graph :: ')
     sys.stdout.flush()
@@ -202,7 +202,7 @@ def graph_event_sequences(sim_file, output_file, sequence_length=3, event_range=
         event_data = events.get_event_data(['event_elements', 'event_year', 'event_magnitude', 'event_number', 'event_trigger'], event_range=event_range, magnitude_filter=magnitude_filter, section_filter=section_filter)
         
         # initilize a graph
-        G = nx.DiGraph(sim_file=sim_file, event_range=None, section_filter=None, magnitude_filter=None)
+        G = nx.DiGraph(name='Event sequence graph for {}'.format(sim_file), sim_file=sim_file, event_range=None, section_filter=None, magnitude_filter=None)
         
         sys.stdout.write('{} events : {} years\n'.format(len(event_data['event_year']),event_data['event_year'][-1] - event_data['event_year'][0] ))
         sys.stdout.flush()

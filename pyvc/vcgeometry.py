@@ -87,6 +87,10 @@ class VCGeometry(VCSys):
         except KeyError:
             raise vcexceptions.BadSectionID(secid)
 
+    def get_section_name(self, secid):
+        bis = self.geometry_data.read_where('{type} == {value}'.format(type='section_id', value=secid))
+        return bis[0]['fault_name']
+
     def get_section_info(self, section_filter=None, section_id=None):
         if section_filter is not None:
             section_info = {}

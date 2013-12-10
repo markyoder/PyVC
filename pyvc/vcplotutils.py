@@ -287,13 +287,14 @@ class VCSpaceTimePlot(object):
             else:
                 self.ppy = 4.0
         
-        # the event line width and pixels per "y" are based on the y_axis_data_size
+        # the event line width and pixels per "x" are based on the x_axis_data_size
         self.ppx = 1.0
         if math.ceil(self.x_axis_data_size) < 640 and math.ceil(self.x_axis_data_size) >= 320:
             self.ppx = 2.0
         elif math.ceil(self.x_axis_data_size) < 320:
             self.ppx = 4.0
-
+        
+        print math.ceil(self.x_axis_data_size)
         # the margins
         self.lm = 50.0
         self.bm = 10.0
@@ -320,7 +321,7 @@ class VCSpaceTimePlot(object):
         # the height of the plot area depends on the pixels per "y" value
         self.ph = self.ppy * math.ceil(self.y_axis_data_size)
 
-        # the height of the plot area depends on the pixels per "y" value
+        # the width of the plot area depends on the pixels per "x" value
         self.pw = self.ppx * math.ceil(self.x_axis_data_size)
 
         # the top margin is based on the size of the section labels and their
