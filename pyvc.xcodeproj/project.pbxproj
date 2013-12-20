@@ -7,8 +7,6 @@
 	objects = {
 
 /* Begin PBXBuildFile section */
-		B83B0D771815A6FA00593A8B /* main.cpp in Sources */ = {isa = PBXBuildFile; fileRef = B83B0D761815A6FA00593A8B /* main.cpp */; };
-		B83B0D791815A6FA00593A8B /* disp_calc.1 in CopyFiles */ = {isa = PBXBuildFile; fileRef = B83B0D781815A6FA00593A8B /* disp_calc.1 */; };
 		B8F62D481815C79C00CC27A0 /* libquakelib.a in Frameworks */ = {isa = PBXBuildFile; fileRef = B8F62D471815C79C00CC27A0 /* libquakelib.a */; };
 /* End PBXBuildFile section */
 
@@ -19,7 +17,6 @@
 			dstPath = /usr/share/man/man1/;
 			dstSubfolderSpec = 0;
 			files = (
-				B83B0D791815A6FA00593A8B /* disp_calc.1 in CopyFiles */,
 			);
 			runOnlyForDeploymentPostprocessing = 1;
 		};
@@ -38,9 +35,7 @@
 		B82E3499184E7C0300CECB04 /* vcplotutils.py */ = {isa = PBXFileReference; lastKnownFileType = text.script.python; path = vcplotutils.py; sourceTree = "<group>"; };
 		B82E349A184E876600CECB04 /* vcsimdata.py */ = {isa = PBXFileReference; lastKnownFileType = text.script.python; path = vcsimdata.py; sourceTree = "<group>"; };
 		B82FAEEA17DE904C008A9BA2 /* pyvc_tests.py */ = {isa = PBXFileReference; lastKnownFileType = text.script.python; path = pyvc_tests.py; sourceTree = "<group>"; };
-		B83B0D731815A6FA00593A8B /* disp_calc */ = {isa = PBXFileReference; explicitFileType = "compiled.mach-o.executable"; includeInIndex = 0; path = disp_calc; sourceTree = BUILT_PRODUCTS_DIR; };
-		B83B0D761815A6FA00593A8B /* main.cpp */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.cpp.cpp; path = main.cpp; sourceTree = "<group>"; };
-		B83B0D781815A6FA00593A8B /* disp_calc.1 */ = {isa = PBXFileReference; lastKnownFileType = text.man; path = disp_calc.1; sourceTree = "<group>"; };
+		B83B0D731815A6FA00593A8B /* disp_calc */ = {isa = PBXFileReference; explicitFileType = "compiled.mach-o.executable"; includeInIndex = 0; name = disp_calc; path = /Users/sachs/Documents/PyVC/build/Debug/disp_calc; sourceTree = "<absolute>"; };
 		B8AF44BA18243AAA00817D12 /* okada_gravity_test.py */ = {isa = PBXFileReference; lastKnownFileType = text.script.python; name = okada_gravity_test.py; path = local/okada_gravity_test.py; sourceTree = "<group>"; };
 		B8EFC34B17CFC629006B4107 /* vcsys.py */ = {isa = PBXFileReference; fileEncoding = 4; lastKnownFileType = text.script.python; path = vcsys.py; sourceTree = "<group>"; };
 		B8EFC34C17CFC6B1006B4107 /* vcgeometry.py */ = {isa = PBXFileReference; fileEncoding = 4; lastKnownFileType = text.script.python; path = vcgeometry.py; sourceTree = "<group>"; };
@@ -87,23 +82,6 @@
 			name = other;
 			sourceTree = "<group>";
 		};
-		B83B0D741815A6FA00593A8B /* Products */ = {
-			isa = PBXGroup;
-			children = (
-				B83B0D731815A6FA00593A8B /* disp_calc */,
-			);
-			name = Products;
-			sourceTree = "<group>";
-		};
-		B83B0D751815A6FA00593A8B /* disp_calc */ = {
-			isa = PBXGroup;
-			children = (
-				B83B0D761815A6FA00593A8B /* main.cpp */,
-				B83B0D781815A6FA00593A8B /* disp_calc.1 */,
-			);
-			path = disp_calc;
-			sourceTree = "<group>";
-		};
 		B8948A021385A580008946E8 = {
 			isa = PBXGroup;
 			children = (
@@ -112,8 +90,6 @@
 				B814514A17DF77CB0022664B /* local */,
 				B82FAEEA17DE904C008A9BA2 /* pyvc_tests.py */,
 				B8EFC34517CFC5FA006B4107 /* pyvc */,
-				B83B0D751815A6FA00593A8B /* disp_calc */,
-				B83B0D741815A6FA00593A8B /* Products */,
 			);
 			sourceTree = "<group>";
 		};
@@ -173,7 +149,7 @@
 				German,
 			);
 			mainGroup = B8948A021385A580008946E8;
-			productRefGroup = B83B0D741815A6FA00593A8B /* Products */;
+			productRefGroup = B8948A021385A580008946E8;
 			projectDirPath = "";
 			projectRoot = "";
 			targets = (
@@ -187,7 +163,6 @@
 			isa = PBXSourcesBuildPhase;
 			buildActionMask = 2147483647;
 			files = (
-				B83B0D771815A6FA00593A8B /* main.cpp in Sources */,
 			);
 			runOnlyForDeploymentPostprocessing = 0;
 		};
