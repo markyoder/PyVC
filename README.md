@@ -2,10 +2,7 @@ PyVC
 ====
 
 PyVC is a set of python tools designed to analyze Virtual California
-simulations. The 'v2' branch contains a full rewrite of the 'master' branch with 
-a focus on speed, elegance and portability. The functionality of the 'master' 
-branch is being migrated tool by tool so the tools will become available as they
-are completed.
+simulations.
 
 To see what the new PyVC can do, run python pyvc_tests.py from the command line.
 
@@ -15,4 +12,4 @@ python 2.7
 PyTables 3.XX
 matplotlib 
 numpy 
-geographiclib
+quakelib (see https://github.com/mksachs/VirtualCalifornia)
