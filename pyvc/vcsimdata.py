@@ -9,6 +9,7 @@ import time
 
 import tables
 
+from vcutils import EventDataProcessor
 import quakelib
 
 #-------------------------------------------------------------------------------

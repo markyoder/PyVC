@@ -28,6 +28,7 @@
 		B812251A180EF62E00939792 /* VC.py */ = {isa = PBXFileReference; lastKnownFileType = text.script.python; name = VC.py; path = local/VC.py; sourceTree = "<group>"; };
 		B812F043180C607200BC7E6C /* vcanalysis.py */ = {isa = PBXFileReference; lastKnownFileType = text.script.python; path = vcanalysis.py; sourceTree = "<group>"; };
 		B812F045180DB48000BC7E6C /* .gitignore */ = {isa = PBXFileReference; lastKnownFileType = text; path = .gitignore; sourceTree = "<group>"; };
+		B813B5991864F69600C07DE8 /* disp_calc */ = {isa = PBXFileReference; explicitFileType = "compiled.mach-o.executable"; includeInIndex = 0; name = disp_calc; path = /Users/sachs/Documents/PyVC/build/Debug/disp_calc; sourceTree = "<absolute>"; };
 		B814514C17DF78100022664B /* LICENSE */ = {isa = PBXFileReference; lastKnownFileType = text; path = LICENSE; sourceTree = "<group>"; };
 		B814514D17DF78100022664B /* README.md */ = {isa = PBXFileReference; lastKnownFileType = text; path = README.md; sourceTree = "<group>"; };
 		B8198A9B1819A7D10024E235 /* okada_displacement_test.py */ = {isa = PBXFileReference; lastKnownFileType = text.script.python; name = okada_displacement_test.py; path = local/okada_displacement_test.py; sourceTree = "<group>"; };
@@ -35,7 +36,6 @@
 		B82E3499184E7C0300CECB04 /* vcplotutils.py */ = {isa = PBXFileReference; lastKnownFileType = text.script.python; path = vcplotutils.py; sourceTree = "<group>"; };
 		B82E349A184E876600CECB04 /* vcsimdata.py */ = {isa = PBXFileReference; lastKnownFileType = text.script.python; path = vcsimdata.py; sourceTree = "<group>"; };
 		B82FAEEA17DE904C008A9BA2 /* pyvc_tests.py */ = {isa = PBXFileReference; lastKnownFileType = text.script.python; path = pyvc_tests.py; sourceTree = "<group>"; };
-		B83B0D731815A6FA00593A8B /* disp_calc */ = {isa = PBXFileReference; explicitFileType = "compiled.mach-o.executable"; includeInIndex = 0; name = disp_calc; path = /Users/sachs/Documents/PyVC/build/Debug/disp_calc; sourceTree = "<absolute>"; };
 		B8AF44BA18243AAA00817D12 /* okada_gravity_test.py */ = {isa = PBXFileReference; lastKnownFileType = text.script.python; name = okada_gravity_test.py; path = local/okada_gravity_test.py; sourceTree = "<group>"; };
 		B8EFC34B17CFC629006B4107 /* vcsys.py */ = {isa = PBXFileReference; fileEncoding = 4; lastKnownFileType = text.script.python; path = vcsys.py; sourceTree = "<group>"; };
 		B8EFC34C17CFC6B1006B4107 /* vcgeometry.py */ = {isa = PBXFileReference; fileEncoding = 4; lastKnownFileType = text.script.python; path = vcgeometry.py; sourceTree = "<group>"; };
@@ -127,7 +127,7 @@
 			);
 			name = disp_calc;
 			productName = disp_calc;
-			productReference = B83B0D731815A6FA00593A8B /* disp_calc */;
+			productReference = B813B5991864F69600C07DE8 /* disp_calc */;
 			productType = "com.apple.product-type.tool";
 		};
 /* End PBXNativeTarget section */
