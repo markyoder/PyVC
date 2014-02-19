@@ -99,7 +99,7 @@ def standard_plot(output_file, x, y, legend_loc='best', **kwargs):
     else:
         plot_format = 'png'
 
-    if plot_format != 'png' and plot_format != 'pdf' and plot_format != 'dat':
+    if plot_format != 'png' and plot_format != 'pdf' and plot_format != 'dat' and plot_format != 'tsv':
             raise vcexceptions.PlotFormatNotSupported(plot_format)
     elif plot_format == 'png' or plot_format == 'pdf':
     #---------------------------------------------------------------------------
@@ -232,6 +232,20 @@ def standard_plot(output_file, x, y, legend_loc='best', **kwargs):
         if output_file is not None:
             # save the plot
             mplt.savefig(output_file, format=plot_format, dpi=res)
+    elif plot_format == 'dat':
+        f = open(output_file,'w')
+
+        for i, xi in enumerate(x):
+            f.write('{mag} {freq}\r'.format(mag=xi, freq=y[i]))
+
+        f.close()
+    elif plot_format == 'tsv':
+        f = open(output_file,'w')
+
+        for i, xi in enumerate(x):
+            f.write('{mag}\t{freq}\r'.format(mag=xi, freq=y[i]))
+
+        f.close()
 
 #-------------------------------------------------------------------------------
 # a class to manage the space-time plot

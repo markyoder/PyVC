@@ -30,7 +30,7 @@ class PlotFormatNotSupported(Exception):
     def __init__(self, code):
         self.code = code
     def __str__(self):
-        return 'The plot output format {} is not supported. Please use png, pdf or dat.'.format(self.code)
+        return 'The plot output format {} is not supported. Please use png, pdf, dat or tsv.'.format(self.code)
 
 class NoEventsFound(Exception):
     def __init__(self, **kwargs):

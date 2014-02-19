@@ -1941,8 +1941,6 @@ def plot_graph_matrix(graph_file, output_file=None):
     #ax.set_ylim((15.5, -0.5))
     #ax.set_xlim((140.5, len(pos_sid_prob)-0.5))
 
-
-
 #-------------------------------------------------------------------------------
 # plots an event graph
 #-------------------------------------------------------------------------------
@@ -2262,10 +2260,10 @@ def magnitude_rupture_area(sim_file, output_file=None, event_range=None, section
     event_area_kmsq = [quakelib.Conversion().sqm2sqkm(x) for x in event_data['event_area']]
     
     # get the binned averages of the data
-    x_ave, y_ave = vcutils.calculate_averages(event_area_kmsq, event_data['event_magnitude'])
+    x_ave, y_ave = vcplotutils.calculate_averages(event_area_kmsq, event_data['event_magnitude'])
     
     # get the plot label which will depend on the filters
-    plot_label = vcutils.get_plot_label(sim_file, event_range=event_range, section_filter=section_filter, magnitude_filter=magnitude_filter)
+    plot_label = vcplotutils.get_plot_label(sim_file, event_range=event_range, section_filter=section_filter, magnitude_filter=magnitude_filter)
     
     x_WC = np.linspace(2.2,5184)
     y_WC = 4.07 + 0.98 * np.log10(x_WC)
@@ -2274,7 +2272,7 @@ def magnitude_rupture_area(sim_file, output_file=None, event_range=None, section
     y_error_WC = [np.subtract(y_WC, y_error_minus_WC), np.subtract(y_error_plus_WC, y_WC)]
 
     # do the standard plot
-    vcutils.standard_plot(output_file, event_area_kmsq, event_data['event_magnitude'],
+    vcplotutils.standard_plot(output_file, event_area_kmsq, event_data['event_magnitude'],
         axis_format='semilogx',
         add_lines=[
             {'label':'binned average', 'x':x_ave, 'y':y_ave},
@@ -2310,10 +2308,10 @@ def magnitude_average_slip(sim_file, output_file=None, event_range=None, section
     # TODO: Move this to another function
 
     # get the binned averages of the data
-    x_ave, y_ave = vcutils.calculate_averages(event_data['event_average_slip'], event_data['event_magnitude'])
+    x_ave, y_ave = vcplotutils.calculate_averages(event_data['event_average_slip'], event_data['event_magnitude'])
     
     # get the plot label which will depend on the filters
-    plot_label = vcutils.get_plot_label(sim_file, event_range=event_range, section_filter=section_filter, magnitude_filter=magnitude_filter)
+    plot_label = vcplotutils.get_plot_label(sim_file, event_range=event_range, section_filter=section_filter, magnitude_filter=magnitude_filter)
 
     x_WC = np.linspace(0.05,8, num=10)
     y_WC = 6.93 + 0.82 * np.log10(x_WC)
@@ -2322,7 +2320,7 @@ def magnitude_average_slip(sim_file, output_file=None, event_range=None, section
     y_error_WC = [np.subtract(y_WC, y_error_minus_WC), np.subtract(y_error_plus_WC, y_WC)]
     
     # do the standard plot
-    vcutils.standard_plot(output_file, event_data['event_average_slip'], event_data['event_magnitude'],
+    vcplotutils.standard_plot(output_file, event_data['event_average_slip'], event_data['event_magnitude'],
         axis_format='semilogx',
         add_lines=[
             {'label':'binned average', 'x':x_ave, 'y':y_ave},
@@ -2361,10 +2359,10 @@ def average_slip_surface_rupture_length(sim_file, output_file=None, event_range=
     event_surface_rupture_length_km = [quakelib.Conversion().m2km(x) for x in event_data['event_surface_rupture_length']]
     
     # get the binned averages of the data
-    x_ave, y_ave = vcutils.calculate_averages(event_surface_rupture_length_km, event_data['event_average_slip'])
+    x_ave, y_ave = vcplotutils.calculate_averages(event_surface_rupture_length_km, event_data['event_average_slip'])
     
     # get the plot label which will depend on the filters
-    plot_label = vcutils.get_plot_label(sim_file, event_range=event_range, section_filter=section_filter, magnitude_filter=magnitude_filter)
+    plot_label = vcplotutils.get_plot_label(sim_file, event_range=event_range, section_filter=section_filter, magnitude_filter=magnitude_filter)
 
     x_WC = np.linspace(3.8,432, num=10)
     y_WC = 10.0**(-1.43 + 0.88 * np.log10(x_WC))
@@ -2373,7 +2371,7 @@ def average_slip_surface_rupture_length(sim_file, output_file=None, event_range=
     y_error_WC = [np.subtract(y_WC, y_error_minus_WC), np.subtract(y_error_plus_WC, y_WC)]
     
     # do the standard plot
-    vcutils.standard_plot(output_file, event_surface_rupture_length_km, event_data['event_average_slip'],
+    vcplotutils.standard_plot(output_file, event_surface_rupture_length_km, event_data['event_average_slip'],
         axis_format='loglog',
         add_lines=[
             {'label':'binned average', 'x':x_ave, 'y':y_ave},
@@ -2430,7 +2428,7 @@ def frequency_magnitude(sim_file, output_file=None, event_range=None, section_fi
     y_b1 = 10**(math.log(y[0],10)+x[0]-x_b1)
 
     # get the plot label which will depend on the filters
-    plot_label = vcutils.get_plot_label(sim_file, event_range=event_range, section_filter=section_filter, magnitude_filter=magnitude_filter)
+    plot_label = vcplotutils.get_plot_label(sim_file, event_range=event_range, section_filter=section_filter, magnitude_filter=magnitude_filter)
     
     # for the UCERF2 error bars
     x_UCERF = [5.0, 5.5, 6.0, 6.5, 7.0, 7.5]
@@ -2438,7 +2436,7 @@ def frequency_magnitude(sim_file, output_file=None, event_range=None, section_fi
     y_error_UCERF = [[1.2, 0.37, 0.22, 0.09, 0.04, 0.016],[1.50, 0.43, 0.28, 0.11, 0.06, 0.035]]
     
     # do the standard plot
-    vcutils.standard_plot(output_file, x, y,
+    vcplotutils.standard_plot(output_file, x, y,
         axis_format='semilogy',
         add_lines=[{'label':'b=1', 'x':x_b1, 'y':y_b1}, {'label':'UCERF2', 'x':x_UCERF, 'y':y_UCERF, 'ls':'--', 'c':'red', 'y_error':y_error_UCERF}],
         axis_labels = {'y':'log(# events per year)', 'x':'Magnitude'},
