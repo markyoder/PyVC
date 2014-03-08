@@ -135,6 +135,9 @@ build/
 !default.mode2v3
 !default.perspectivev3
 
+pyvc.xcodeproj/project.pbxproj 
+
+
 
 ####
 # Xcode 4 - semi-personal settings
