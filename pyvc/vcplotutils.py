@@ -1166,4 +1166,233 @@ class VCGravityFieldPlotter(object):
 
 
 
+#-------------------------------------------------------------------------------
+# A class to handle plotting event gravity fields
+#-------------------------------------------------------------------------------
+class VCGravityFieldEvolver(object):
+    def __init__(self, min_lat, max_lat, min_lon, max_lon, sim_year, map_res='i', map_proj='cyl'):
+        
+        self.norm = None
+        self.time = sim_year
+        
+        #-----------------------------------------------------------------------
+        # Gravity map configuration
+        #-----------------------------------------------------------------------
+        self.dmc = {
+            'font':               mfont.FontProperties(family='Arial', style='normal', variant='normal', weight='normal'),
+            'font_bold':          mfont.FontProperties(family='Arial', style='normal', variant='normal', weight='bold'),
+            'cmap':               mplt.get_cmap('seismic'),
+            #water
+            'water_color':          '#4eacf4',
+            #map boundaries
+            'boundary_color':       '#000000',
+            'boundary_width':       1.0,
+            'coastline_color':      '#000000',
+            'coastline_width':      1.0,
+            'country_color':        '#000000',
+            'country_width':        1.0,
+            'state_color':          '#000000',
+            'state_width':          1.0,
+            #rivers
+            'river_width':          0.25,
+            #faults
+            'fault_color':          '#000000',
+            'event_fault_color':    '#ff0000',
+            'fault_width':          0.5,
+            #lat lon grid
+            'grid_color':           '#000000',
+            'grid_width':           0.0,
+            'num_grid_lines':       5,
+            #map props
+            'map_resolution':       map_res,
+            'map_projection':       map_proj,
+            'plot_resolution':      72.0,
+            'map_tick_color':       '#000000',
+            'map_frame_color':      '#000000',
+            'map_frame_width':      1,
+            'map_fontsize':         12,
+            'arrow_inset':          10.0,
+            'arrow_fontsize':       9.0,
+            'cb_fontsize':          10.0,
+            'cb_fontcolor':         '#000000',
+            'cb_height':            20.0,
+            'cb_margin_t':          10.0,
+            #min/max gravity change labels for colorbar (in microgals)
+            'cbar_min':             -20,
+            'cbar_max':             20
+        }
+        
+        #-----------------------------------------------------------------------
+        # m1, fig1 is the oceans and the continents. This will lie behind the
+        # masked data image.
+        #-----------------------------------------------------------------------
+        self.m1 = Basemap(
+            llcrnrlon=min_lon,
+            llcrnrlat=min_lat,
+            urcrnrlon=max_lon,
+            urcrnrlat=max_lat,
+            lat_0=(max_lat+min_lat)/2.0,
+            lon_0=(max_lon+min_lon)/2.0,
+            resolution=map_res,
+            projection=map_proj,
+            suppress_ticks=True)
+        #-----------------------------------------------------------------------
+        # m2, fig2 is the plotted deformation data.
+        #-----------------------------------------------------------------------
+        self.m2 = Basemap(
+            llcrnrlon=min_lon,
+            llcrnrlat=min_lat,
+            urcrnrlon=max_lon,
+            urcrnrlat=max_lat,
+            lat_0=(max_lat+min_lat)/2.0,
+            lon_0=(max_lon+min_lon)/2.0,
+            resolution=map_res,
+            projection=map_proj,
+            suppress_ticks=True)
+        #-----------------------------------------------------------------------
+        # m3, fig3 is the ocean land mask.
+        #-----------------------------------------------------------------------
+        self.m3 = Basemap(
+            llcrnrlon=min_lon,
+            llcrnrlat=min_lat,
+            urcrnrlon=max_lon,
+            urcrnrlat=max_lat,
+            lat_0=(max_lat+min_lat)/2.0,
+            lon_0=(max_lon+min_lon)/2.0,
+            resolution=map_res,
+            projection=map_proj,
+            suppress_ticks=True)
+    
+    def set_field(self, field):
+        self.lons_1d = field.lons_1d
+        self.lats_1d = field.lats_1d
+        self.dG = field.dG
+        
+    #def update_field(self, field, sim_time):
+    
+    #---------------------------------------------------------------------------
+    # Returns a PIL image of the masked displacement map using the current
+    # values of the displacements. This map can then be combined into a still
+    # or used as part of an animation.
+    #---------------------------------------------------------------------------
+    def create_field_image(self, fringes=True):
+        
+        #-----------------------------------------------------------------------
+        # Set all of the plotting properties
+        #-----------------------------------------------------------------------
+        
+        cmap            = self.dmc['cmap']
+        water_color     = self.dmc['water_color']
+        boundary_color  = self.dmc['boundary_color']
+        land_color      = cmap(0.5)
+        plot_resolution = self.dmc['plot_resolution']
+        
+        #-----------------------------------------------------------------------
+        # Set the map dimensions
+        #-----------------------------------------------------------------------
+        mw = self.lons_1d.size
+        mh = self.lats_1d.size
+        mwi = mw/plot_resolution
+        mhi = mh/plot_resolution
+        
+        #-----------------------------------------------------------------------
+        # Fig1 is the background land and ocean.
+        #-----------------------------------------------------------------------
+        fig1 = mplt.figure(figsize=(mwi, mhi), dpi=plot_resolution)
+        self.m1.ax = fig1.add_axes((0,0,1,1))
+        self.m1.drawmapboundary(
+            color=boundary_color,
+            linewidth=0,
+            fill_color=water_color
+                                )
+        self.m1.fillcontinents(
+            color=land_color,
+            lake_color=water_color
+                              )
+        #-----------------------------------------------------------------------
+        # Fig2 is the deformations.
+        #-----------------------------------------------------------------------
+        fig2 = mplt.figure(figsize=(mwi, mhi), dpi=plot_resolution)
+        self.m2.ax = fig2.add_axes((0,0,1,1))
+                                                       
+        # make sure the values are located at the correct location on the map
+        dG_transformed = self.m2.transform_scalar(self.dG, self.lons_1d, self.lats_1d, self.lons_1d.size, self.lats_1d.size)
+                                                       
+        if self.norm is None:
+            #self.norm = mcolor.Normalize(vmin=np.amin(dG_transformed), vmax=np.amax(dG_transformed))
+            # Changed units to microgals (multiply MKS unit by 10^8)
+            self.norm = mcolor.Normalize(vmin=self.dmc['cbar_min'], vmax=self.dmc['cbar_max'])
+                                                       
+            #self.m2.imshow(dG_transformed, cmap=cmap, norm=self.norm)
+            # Changed units to microgals (multiply MKS unit by 10^8)
+            self.m2.imshow(dG_transformed*float(pow(10,8)), cmap=cmap, norm=self.norm)
+                                                       
+            #-----------------------------------------------------------------------
+            # Fig3 is the land/sea mask.
+            #-----------------------------------------------------------------------
+            """fig3 = mplt.figure(figsize=(mwi, mhi), dpi=plot_resolution)
+            self.m3.ax = fig3.add_axes((0,0,1,1))
+            #self.m3.fillcontinents(color='#000000', lake_color='#ffffff')
+            dG_abs = np.fabs(dG_transformed)
+            #print np.amin(dG_abs), np.amax(dG_abs), 1e6*np.amin(dG_abs), np.amax(dG_abs)*1e-1
+            im = self.m3.imshow(dG_abs, cmap=mplt.get_cmap('gray_r'), norm=mcolor.Normalize(vmin=1e6*np.amin(dG_abs), vmax=np.amax(dG_abs)*1e-1, clip=True))
+                                                           
+            fig3.savefig('local/test_mask.png', format='png', dpi=plot_resolution)
+            """
+            #-----------------------------------------------------------------------
+            # Composite fig 1 - 3 together
+            #-----------------------------------------------------------------------
+            # FIGURE 1 draw the renderer
+            fig1.canvas.draw()
+                                                       
+            # FIGURE 1 Get the RGBA buffer from the figure
+            w,h = fig1.canvas.get_width_height()
+            buf = np.fromstring ( fig1.canvas.tostring_argb(), dtype=np.uint8 )
+            buf.shape = ( w, h,4 )
+                                                       
+            # FIGURE 1 canvas.tostring_argb give pixmap in ARGB mode. Roll the ALPHA channel to have it in RGBA mode
+            buf = np.roll ( buf, 3, axis = 2 )
+            im1 = Image.fromstring( "RGBA", ( w ,h ), buf.tostring( ) )
+                                                       
+            # FIGURE 2 draw the renderer
+            fig2.canvas.draw()
+                                                       
+            # FIGURE 2 Get the RGBA buffer from the figure
+            w,h = fig2.canvas.get_width_height()
+            buf = np.fromstring ( fig2.canvas.tostring_argb(), dtype=np.uint8 )
+            buf.shape = ( w, h,4 )
+                                                       
+            # FIGURE 2 canvas.tostring_argb give pixmap in ARGB mode. Roll the ALPHA channel to have it in RGBA mode
+            buf = np.roll ( buf, 3, axis = 2 )
+            im2 = Image.fromstring( "RGBA", ( w ,h ), buf.tostring( ) )
+                                                       
+            # FIGURE 3 draw the renderer
+            """fig3.canvas.draw()
+                                                           
+            # FIGURE 3 Get the RGBA buffer from the figure
+            w,h = fig3.canvas.get_width_height()
+            buf = np.fromstring ( fig3.canvas.tostring_argb(), dtype=np.uint8 )
+            buf.shape = ( w, h,4 )
+                                                           
+            # FIGURE 3 canvas.tostring_argb give pixmap in ARGB mode. Roll the ALPHA channel to have it in RGBA mode
+            buf = np.roll ( buf, 3, axis = 2 )
+            im3 = Image.fromstring( "RGBA", ( w ,h ), buf.tostring( ) )
+                                                           
+            mask = im3.convert('L')
+            """
+                                                       
+            # Clear all three figures
+            fig1.clf()
+            fig2.clf()
+            #fig3.clf()
+            mplt.close('all')
+            gc.collect()
+                                                       
+            #mask = Image.new("L", (w,h), 'black')
+            # The final composited image.
+            #return  Image.composite(im1, im2, mask)
+        return im2
+
+
+
 

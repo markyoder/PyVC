@@ -139,7 +139,7 @@
 		B8948A041385A580008946E8 /* Project object */ = {
 			isa = PBXProject;
 			attributes = {
-				LastUpgradeCheck = 0410;
+				LastUpgradeCheck = 0500;
 			};
 			buildConfigurationList = B8948A071385A580008946E8 /* Build configuration list for PBXProject "pyvc" */;
 			compatibilityVersion = "Xcode 3.2";

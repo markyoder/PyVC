@@ -16,6 +16,7 @@ class VCEvents(VCSys):
         # the tables we need from the simulation data
         self.event_data = self.sim_data.file.root.event_table
         self.sweep_data = self.sim_data.file.root.event_sweep_table
+        self.block_data = self.sim_data.file.root.block_info_table
     
     def __getitem__(self, evnum):
         return self.event_data[evnum]
@@ -40,6 +41,7 @@ class VCEvents(VCSys):
                 slips[sweep['block_id']] = sweep['slip']
         return slips
 
+    def get_element_slip_rates(self)
     
     def get_event_slip_area(self, evnum):
         areas = {}
