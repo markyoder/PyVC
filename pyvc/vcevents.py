@@ -1,6 +1,7 @@
 #!/usr/bin/env python
 from . import VCSys
 from . import vcexceptions
+from . import vcexceptions
 
 import itertools
 from operator import itemgetter
@@ -40,8 +41,6 @@ class VCEvents(VCSys):
             except KeyError:
                 slips[sweep['block_id']] = sweep['slip']
         return slips
-
-    def get_element_slip_rates(self)
     
     def get_event_slip_area(self, evnum):
         areas = {}
@@ -164,7 +163,7 @@ class VCEvents(VCSys):
         
         #-----------------------------------------------------------------------
         # Here is where the events are being grabbed. Code readability is
-        # sacraficed to avoid conditionals in big loops where possible. The
+        # sacrificed to avoid conditionals in big loops where possible. The
         # section filter is the most expensive filter because it doesnt allow us
         # to use PyTables in kernal queries. Because of this we also need a
         # different strategy when filtering by section. The approach to applying

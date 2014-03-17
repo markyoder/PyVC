@@ -81,6 +81,75 @@ class VCGeometry(VCSys):
         else:
             return [self.geometry_data[elements[0]]['section_id']]
     
+    
+    
+    def get_slip_rates(self,section_filter=None):
+        rates = {}
+        
+        if section_filter is not None:
+            bis={}
+            for secid in section_filter['filter']:
+                for block in self.geometry_data.read_where('{type} == {value}'.format(type='section_id', value=secid)):
+                    rates[int(block['block_id'])] = block['slip_velocity']
+        else:
+            for block in self.geometry_data:
+                rates[int(block['block_id'])] = block['slip_velocity']
+
+        return rates
+        
+        
+        
+    def get_slip_time_series(self,events_in_range,event_element_slips,DT=0.1,start_year=0.0,duration=100.0,section_filter=None):
+        from numpy import arange
+        # event_element_slips = dictionary indexed by event_id with entries being dictionaries of slips indexed by block_id
+        # slip_time_series    = dictionary indexed by block_id with entries being arrays of absolute slip at each time step
+       
+       
+        # Convert slip rates from meters/second to meters/(decimal year)
+        CONVERSION = 3.15576*pow(10,7)
+        # DT = 0.1yr evaluates field every 36.5 days
+        
+        # Get slip rates for the elements
+        slip_rates = self.get_slip_rates(section_filter=section_filter)
+        
+
+        #Initialize blocks with 0.0 slip at time t=0.0
+        slip_time_series  = {block_id:[0.0] for block_id in slip_rates.keys()}
+        #event_time_series = [None for each in slip_time_series[slip_time_series.keys()[0]]]
+    
+
+        #Initialize time steps to evaluate slip    
+        time_values = arange(start_year+DT,start_year+duration+DT,DT)
+
+        for k in range(len(time_values)):
+            if k>0:
+                # current time in simulation
+                right_now = time_values[k]
+        
+                # back slip all elements by subtracting the slip_rate*dt
+                for block_id in slip_time_series.keys():
+                    last_slip = slip_time_series[block_id][k-1]
+                    this_slip = slip_rates[block_id]*CONVERSION*DT
+                    slip_time_series[block_id].append(last_slip-this_slip)
+
+                # check if any elements slip as part of simulated event in the window of simulation time
+                # between (current time - DT, current time), add event slips to the slip at current time 
+                # for elements involved
+                for evid in events_in_range['event_number']:
+                    if right_now-DT < events_in_range['event_year'][evid] <= right_now:
+                        for block_id in event_element_slips[evid].keys():
+                            slip_time_series[block_id][k] += event_element_slips[evid][block_id]
+                            #if len(event_time_series[k]) == 1:
+                            #    event_time_series[k]       = events_in_range['magnitude'][evid]
+                            #else:
+                            #    event_time_series[k].append(events_in_range['magnitude'][evid])
+                            
+        #return slip_time_series,event_time_series
+        return slip_time_series
+
+
+    
+    
     def events_on_section(self, secid):
         try:
             return self.sim_data.file.root.events_by_section._v_children['section_{}'.format(secid)].read()

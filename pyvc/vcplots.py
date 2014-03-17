@@ -5,6 +5,9 @@ from pyvc import vcplotutils
 from pyvc import vcexceptions
 from pyvc import vcanalysis
 
+import matplotlib
+matplotlib.use('agg')
+
 import matplotlib.pyplot as mplt
 import matplotlib.font_manager as mfont
 import matplotlib.colors as mcolor
@@ -2545,10 +2548,10 @@ def event_return_map(sim_file, output_file=None, event_range=None, section_filte
 #-------------------------------------------------------------------------------
 # event field evolution
 #-------------------------------------------------------------------------------
-def event_field_evolution(sim_file, output_directory, event_range,
-    field_type='displacement', fringes=True, padding=0.08, cutoff=None,
-    animation_target_length=60.0, animation_fps = 30.0, fade_seconds = 1.0,
-    min_mag_marker = 6.5, force_plot=False):
+def event_field_evolution(sim_file, output_directory, sim_time_range,
+    field_type='gravity', fringes=True, padding=0.08, cutoff=None,
+    animation_target_length=60.0, animation_fps = 30.0,
+    min_mag_marker = 6.5, start_year = 0.0, duration=100.0, dt=0.1,force_plot=False,section_filter=None):
     
     sys.stdout.write('Initializing animation :: ')
     sys.stdout.flush()
@@ -2579,37 +2582,51 @@ def event_field_evolution(sim_file, output_directory, event_range,
         
         # instantiate the vc classes passing in an instance of the VCSimData
         # class
-        events = VCEvents(sim_data)
-        geometry = VCGeometry(sim_data)
+        events      = VCEvents(sim_data)
+        geometry    = VCGeometry(sim_data)
         
         # Get global information about the simulations geometry
-        min_lat = geometry.min_lat
-        max_lat = geometry.max_lat
-        min_lon = geometry.min_lon
-        max_lon = geometry.max_lon
-        base_lat = geometry.base_lat
-        base_lon = geometry.base_lon
-        fault_traces = geometry.get_fault_traces()
+        min_lat     = geometry.min_lat
+        max_lat     = geometry.max_lat
+        min_lon     = geometry.min_lon
+        max_lon     = geometry.max_lon
+        base_lat    = geometry.base_lat
+        base_lon    = geometry.base_lon
+        fault_traces= geometry.get_fault_traces()
         
         # Get event information
-        event_data = events.get_event_data(['event_magnitude', 'event_year', 'event_number'], event_range=event_range)
-        event_magnitudes = event_data['event_magnitude']
-        event_years = event_data['event_year']
-        event_numbers = event_data['event_number']
-        current_year = start_year = math.floor(event_years[0])
+        if section_filter is not None:
+            event_data = events.get_event_data(['event_magnitude', 'event_year', 'event_number'], event_range=sim_time_range,                          section_filter=section_filter)
+        else:
+            event_data = events.get_event_data(['event_magnitude', 'event_year', 'event_number'], event_range=sim_time_range)
+
+        
+        event_element_slips = {evid:events.get_event_element_slips(evid) for evid in event_data['event_number']}
+        slip_time_series = geometry.get_slip_time_series(event_data,event_element_slips,DT=dt,
+                                                start_year=start_year,duration=duration,section_filter=None)
+        event_magnitudes    = event_data['event_magnitude']
+        event_years         = event_data['event_year']
+        event_numbers       = event_data['event_number']
+        current_year        = start_year 
         
         # These are the event years shifted so the begin at zero.
         _event_years = [y - start_year for y in event_years]
         
         # The large magnitudes and shifted years to be marked on the timeline.
-        event_large_magnitudes = [m for m in event_magnitudes if m > min_mag_marker]
+        event_large_magnitudes       = [m for m in event_magnitudes if m > min_mag_marker]
         _event_large_magnitude_years = [_event_years[i_m[0]] for i_m in enumerate(event_magnitudes) if i_m[1] >= min_mag_marker]
         event_large_magnitude_evnums = [event_numbers[i_m[0]] for i_m in enumerate(event_magnitudes) if i_m[1] > min_mag_marker]
         
         # Calculate the frames per year and the total number of frames
-        total_years = math.ceil(event_years[-1]) - math.floor(event_years[0])
-        fpy = math.ceil(animation_target_length*animation_fps/total_years)
-        total_frames = int(fpy * total_years)
+        #     total years start at start_year and ends 5 years after the last event
+        N_time_steps= len(slip_time_series[slip_time_series.keys()[0]])
+        total_years = N_time_steps*dt
+        fpy         = math.ceil(animation_target_length*animation_fps/total_years)
+        total_frames= int(fpy * total_years)
+        
+        if total_frames != N_time_steps:
+            sys.stdout.write('HAD TO SET NUM FRAMES MANUALLY!')
+            total_frames = N_time_steps
         
         # Instantiate the field and the plotter
         if field_type == 'displacement':
@@ -2620,7 +2637,7 @@ def event_field_evolution(sim_file, output_directory, event_range,
             EF = vcutils.VCGravityField(min_lat, max_lat, min_lon, max_lon, base_lat, base_lon, padding=padding)
             EFP = vcplotutils.VCGravityFieldPlotter(EF.min_lat, EF.max_lat, EF.min_lon, EF.max_lon)
 
-        """
+        # I do not know if the following is necessary for my purposes
         #-----------------------------------------------------------------------
         # Find the biggest event and normalize based on these values.
         #-----------------------------------------------------------------------
@@ -2652,7 +2669,7 @@ def event_field_evolution(sim_file, output_directory, event_range,
                 )
             EFP.set_field(EF)
             EFP.create_field_image()
-        """    
+           
         
         # Convert the fault traces to lat-lon
         fault_traces_latlon = {}
@@ -2779,6 +2796,9 @@ def event_field_evolution(sim_file, output_directory, event_range,
         
         #-----------------------------------------------------------------------
         # Go through all of the frames.
+        #    TREAT EACH FRAME AS THE TIME STEP SEPARATING VALUES IN THE 
+        #          SLIP TIME SERIES. EVENT SLIPS ARE INCLUDED IN THE 
+        #          SLIP TIME SERIES.
         #-----------------------------------------------------------------------
         sys.stdout.write('Total frames : {}, Frames per year : {}\n'.format(total_frames, fpy))
         sys.stdout.flush()
@@ -2790,7 +2810,7 @@ def event_field_evolution(sim_file, output_directory, event_range,
                     ['event_number', 'event_year', 'event_magnitude'],
                     event_range = {'type':'year', 'filter':(current_year - 1, current_year)}
                 )
-
+            
             progress_indicator_year = current_year - 1 - start_year + year_frame/fpy
             
             evnums_this_frame = []
@@ -2803,45 +2823,37 @@ def event_field_evolution(sim_file, output_directory, event_range,
             sids_this_frame = set( itertools.chain(*sids_this_frame) )
 
             sys.stdout.write('frame {} (year {}) of {} ({})\n'.format(the_frame, progress_indicator_year, total_frames, total_years))
-
-            # Remove a fixed percentage from the field. This is the decay
-            # that slowly fades existing field values.
-            EF.shrink_field(1.0 - 1.0/(animation_fps*fade_seconds))
+            
             
             #-------------------------------------------------------------------
-            # Load or calculate all of the data for the current frame.
+            # Apply slip for the current frame, unless it is frame zero.
             #-------------------------------------------------------------------
-            if len(evnums_this_frame) > 0:
-                for i, evnum in enumerate(evnums_this_frame):
-                    sys.stdout.write('\r Event {} :: '.format(evnum))
-                    # Try and load the fields
-                    field_values_loaded = EF.load_field_values('{}{}_'.format(field_values_directory, evnum))
-                    if field_values_loaded:
-                        sys.stdout.write('loaded'.format(evnum))
+            # Try and load the fields
+            if the_frame > 0:
+                field_values_loaded = EF.load_field_values('{}{}_'.format(field_values_directory, the_frame))
+                if field_values_loaded:
+                    sys.stdout.write('loaded'.format(evnum))
                     # If they havent been saved then we need to calculate them
-                    elif not field_values_loaded:
-                        sys.stdout.write('processing '.format(evnum))
-                        sys.stdout.flush()
+                elif not field_values_loaded:
+                    sys.stdout.write('processing '.format(the_frame))
+                    sys.stdout.flush()
                         
-                        event_element_slips = events.get_event_element_slips(evnum)
-                        ele_getter = itemgetter(*event_element_slips.keys())
-                        event_element_data = ele_getter(geometry)
-                        if len(event_element_slips) == 1:
-                            event_element_data = [event_element_data]
+                    # the_frame is 0-based index for each time step in the slip_time_series    
+                    element_slips  = {block_id:slip_time_series[block_id][the_frame] for block_id in slip_time_series.keys()}
+                    ele_getter         = itemgetter(*event_element_slips.keys())
+                    element_data = ele_getter(geometry)
                     
-                        sys.stdout.write('{} elements :: '.format(len(event_element_slips)))
-                        sys.stdout.flush()
+                    sys.stdout.write('{} elements :: '.format(len(element_slips)))
+                    sys.stdout.flush()
                         
-                        EF.calculate_field_values(
-                            event_element_data,
-                            event_element_slips,
+                    EF.calculate_field_values(
+                            element_data,
+                            element_slips,
                             cutoff=cutoff,
-                            save_file_prefix='{}{}_'.format(field_values_directory, evnum)
-                        )
-                        
-                        if i < len(evnums_this_frame)-1 :
-                            sys.stdout.write('\033[2K')
-                        sys.stdout.flush()
+                            save_file_prefix='{}{}_'.format(field_values_directory, the_frame),
+                            save_cumulative=True,
+                    )
+            
 
             sys.stdout.write('\n')
             

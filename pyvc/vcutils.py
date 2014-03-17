@@ -369,6 +369,7 @@ class VCFieldProcessor(multiprocessing.Process):
                 #print element
                 ele = quakelib.EventElement4()
                 ele.set_rake(element['rake_rad'])
+                
                 ele.set_slip(self.event_element_slips[element['block_id']])
                 ele.set_vert(0, element['m_x_pt1'], element['m_y_pt1'], element['m_z_pt1'])
                 ele.set_vert(1, element['m_x_pt2'], element['m_y_pt2'], element['m_z_pt2'])
@@ -571,7 +572,7 @@ class VCGravityField(VCField):
     # Sets up the gravity change calculation and then passes it to the
     # VCFieldProcessor class.
     #---------------------------------------------------------------------------
-    def calculate_field_values(self, event_element_data, event_element_slips, cutoff=None, save_file_prefix=None):
+    def calculate_field_values(self, event_element_data, event_element_slips, cutoff=None, save_file_prefix=None,save_cumulative=False):
         
         #-----------------------------------------------------------------------
         # If the cutoff is none (ie not explicitly set) calculate the cutoff for
@@ -616,15 +617,18 @@ class VCGravityField(VCField):
         # saved. This is done seperately from above because self.dG is a
         # cumulative result that could include contributions from multiple
         # events. We only want to save the results of a single calculation.
+        # UNLESS we want to save the cumulative field, use the save_cumulative
+        # value.
         #-----------------------------------------------------------------------
         if save_file_prefix is not None:
-            dG = None
-            for result in self.results:
-                if dG is None:
-                    dG = result
-                else:
-                    dG += result
-            np.save('{}dG.npy'.format(save_file_prefix), dG)
+            if not save_cumulative:
+                dG = None
+                for result in self.results:
+                    if dG is None:
+                        dG = result
+                    else:
+                        dG += result
+                np.save('{}dG.npy'.format(save_file_prefix), dG)
 
 
     def init_field(self, value):
