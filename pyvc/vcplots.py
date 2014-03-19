@@ -5,10 +5,11 @@ from pyvc import vcplotutils
 from pyvc import vcexceptions
 from pyvc import vcanalysis
 
-import matplotlib
-matplotlib.use('agg')
 
 import matplotlib.pyplot as mplt
+mplt.switch_backend('agg')
+
+
 import matplotlib.font_manager as mfont
 import matplotlib.colors as mcolor
 import matplotlib.colorbar as mcolorbar
@@ -2625,7 +2626,7 @@ def event_field_evolution(sim_file, output_directory, sim_time_range,
         total_frames= int(fpy * total_years)
         
         if total_frames != N_time_steps:
-            sys.stdout.write('HAD TO SET NUM FRAMES MANUALLY!')
+            sys.stdout.write('\nHAD TO SET NUM FRAMES MANUALLY!')
             total_frames = N_time_steps
         
         # Instantiate the field and the plotter
@@ -2641,6 +2642,7 @@ def event_field_evolution(sim_file, output_directory, sim_time_range,
         #-----------------------------------------------------------------------
         # Find the biggest event and normalize based on these values.
         #-----------------------------------------------------------------------
+        """
         if field_type == 'displacement' and not fringes or field_type == 'gravity':
             sys.stdout.write('normalizing : ')
             sys.stdout.flush()
@@ -2669,7 +2671,7 @@ def event_field_evolution(sim_file, output_directory, sim_time_range,
                 )
             EFP.set_field(EF)
             EFP.create_field_image()
-           
+         """  
         
         # Convert the fault traces to lat-lon
         fault_traces_latlon = {}
@@ -2832,7 +2834,7 @@ def event_field_evolution(sim_file, output_directory, sim_time_range,
             if the_frame > 0:
                 field_values_loaded = EF.load_field_values('{}{}_'.format(field_values_directory, the_frame))
                 if field_values_loaded:
-                    sys.stdout.write('loaded'.format(evnum))
+                    sys.stdout.write('loaded '.format(the_frame))
                     # If they havent been saved then we need to calculate them
                 elif not field_values_loaded:
                     sys.stdout.write('processing '.format(the_frame))
@@ -2851,7 +2853,6 @@ def event_field_evolution(sim_file, output_directory, sim_time_range,
                             element_slips,
                             cutoff=cutoff,
                             save_file_prefix='{}{}_'.format(field_values_directory, the_frame),
-                            save_cumulative=True,
                     )
             
 

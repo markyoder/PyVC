@@ -572,7 +572,7 @@ class VCGravityField(VCField):
     # Sets up the gravity change calculation and then passes it to the
     # VCFieldProcessor class.
     #---------------------------------------------------------------------------
-    def calculate_field_values(self, event_element_data, event_element_slips, cutoff=None, save_file_prefix=None,save_cumulative=False):
+    def calculate_field_values(self, event_element_data, event_element_slips, cutoff=None, save_file_prefix=None):
         
         #-----------------------------------------------------------------------
         # If the cutoff is none (ie not explicitly set) calculate the cutoff for
@@ -621,13 +621,12 @@ class VCGravityField(VCField):
         # value.
         #-----------------------------------------------------------------------
         if save_file_prefix is not None:
-            if not save_cumulative:
-                dG = None
-                for result in self.results:
-                    if dG is None:
-                        dG = result
-                    else:
-                        dG += result
+            dG = None
+            for result in self.results:
+                if dG is None:
+                    dG = result
+                else:
+                    dG += result
                 np.save('{}dG.npy'.format(save_file_prefix), dG)
 
 
