@@ -2642,7 +2642,7 @@ def event_field_evolution(sim_file, output_directory, sim_time_range,
         #-----------------------------------------------------------------------
         # Find the biggest event and normalize based on these values.
         #-----------------------------------------------------------------------
-        """
+
         if field_type == 'displacement' and not fringes or field_type == 'gravity':
             sys.stdout.write('normalizing : ')
             sys.stdout.flush()
@@ -2671,7 +2671,7 @@ def event_field_evolution(sim_file, output_directory, sim_time_range,
                 )
             EFP.set_field(EF)
             EFP.create_field_image()
-         """  
+
         
         # Convert the fault traces to lat-lon
         fault_traces_latlon = {}

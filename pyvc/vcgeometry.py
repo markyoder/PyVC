@@ -148,6 +148,23 @@ class VCGeometry(VCSys):
         return slip_time_series
 
 
+
+    def get_average_slip_time_series(self,events_in_range,event_element_slips,dt=0.1,start_year=0.0,duration=100.0,section_filter=None):
+        from numpy import zeros
+
+        slip_time_series  = self.get_slip_time_series(events_in_range,event_element_slips,DT=dt,start_year=start_year,duration=duration,section_filter=section_filter)
+
+        BLOCK_IDS       = slip_time_series.keys()
+        num_steps       = len(slip_time_series[BLOCK_IDS[0]])
+        average_series  = zeros(num_steps)
+
+        for k in range(num_steps):
+            average_series[k]  = sum([slip_time_series[b][k] for b in BLOCK_IDS])
+            average_series[k] /= float(len(BLOCK_IDS))
+
+
+        return average_series
+
     
     
     def events_on_section(self, secid):
