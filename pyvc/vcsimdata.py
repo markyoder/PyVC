@@ -436,9 +436,6 @@ class VCSimData(object):
             # flush the rows to disk
             slip_table.flush()
 
-            slip_table.cols.event_area[:] = [ x['area'] for x in data_process_results_sorted ]
-
-
             # STILL WORKING ON BELOW, NEVER TESTED, CERTAINLY BUGS !!!!!!!!!!!!!!!!!!!
 
             # dict for slip rates on each element
@@ -447,15 +444,6 @@ class VCSimData(object):
             # dict to store the events on each section
             slip_time_series = {block_id:[0.0] for block_id in rates.keys()}
             
-            # we have the sections involved in each event. we need to transpose
-            # this to events on each section
-            for evid, event_data in enumerate(data_process_results_sorted):
-                for secid in event_data['involved_sections']:
-                    try:
-                        events_by_section[secid].append(evid)
-                    except KeyError:
-                        events_by_section[secid] = [evid]
-                        
             for k in range(len(time_values)):
                 # Already initialized slip_time_series with slip(t=0) so skip k=0
                 if k>0:
@@ -471,8 +459,11 @@ class VCSimData(object):
                     # check if any elements slip as part of simulated event in the window of simulation time
                     # between (current time - DT, current time), add event slips to the slip at current time 
                     # for elements involved
-                    for evid in events_in_range['event_number']:
-                        if right_now-DT < events_in_range['event_year'][evid] <= right_now:
+
+                    #   How can I get event element slips in here without using geometry
+
+                    for evid in event_table['event_number']:
+                        if right_now-DT < event_table['event_year'][evid] <= right_now:
                             for block_id in event_element_slips[evid].keys():
                                 slip_time_series[block_id][k] += event_element_slips[evid][block_id]            
                         
