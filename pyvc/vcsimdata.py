@@ -381,6 +381,100 @@ class VCSimData(object):
         # move table2 to table
         event_table_new.move('/','event_table')
         
+<<<<<<< HEAD
+=======
+        
+        #-----------------------------------------------------------------------
+        # create a new group to store the slip time series for each element
+        #-----------------------------------------------------------------------
+        if self.do_slip_time_series:
+            print 'Creating slip time series table'
+            start_time_series = time.time()
+            
+            block_info_table = self.file.root.block_info_table
+            total_elements   = block_info_table.nrows
+            
+            
+            sim_years  = self.file.root.sim_years
+            start_year = sim_years[0]
+            end_year   = sim_years[1]
+            
+            # Convert slip rates from meters/second to meters/(decimal year)
+            CONVERSION = 3.15576*pow(10,7)
+            # DT = 0.1yr evaluates field every 36.5 days, but then its 50000*10 data points
+            dt         = 1.0
+            
+            # create an array of the time steps at which the slips are evaluated    
+            time_values = np.arange(start_year,end_year+dt,dt)
+            
+            #-----------------------------------------------------------------------
+            # create the new table
+            #-----------------------------------------------------------------------        
+            # description of table in dictionary format
+            desc = {'element_{}'.format(eid):tables.Float64Col(dflt=0.0) for eid in range(total_elements)}
+                
+            # create a new table with the new description
+            slip_table = self.file.create_table('/', 'tmp', desc, 'Slip Table')
+        
+            # copy the user attributes
+            event_table.attrs._f_copy(slip_table)
+        
+            # fill the rows of new table with default values
+            for i in xrange(len(time_values)):
+                slip_table.row.append()
+        
+            # flush the rows to disk
+            slip_table.flush()
+
+            # STILL WORKING ON BELOW, NEVER TESTED, CERTAINLY BUGS !!!!!!!!!!!!!!!!!!!
+
+            # dict for slip rates on each element
+            rates = {int(block['block_id']):block['slip_velocity']*CONVERSION for block in block_info_table}
+            
+            # dict to store the events on each section
+            slip_time_series = {block_id:[0.0] for block_id in rates.keys()}
+            
+            for k in range(len(time_values)):
+                # Already initialized slip_time_series with slip(t=0) so skip k=0
+                if k>0:
+                    # current time in simulation
+                    right_now = time_values[k]
+        
+                    # back slip all elements by subtracting the slip_rate*dt
+                    for block_id in slip_time_series.keys():
+                        last_slip = slip_time_series[block_id][k-1]
+                        this_slip = slip_rates[block_id]*CONVERSION*DT
+                        slip_time_series[block_id].append(last_slip-this_slip)
+
+                    # check if any elements slip as part of simulated event in the window of simulation time
+                    # between (current time - DT, current time), add event slips to the slip at current time 
+                    # for elements involved
+
+                    #   How can I get event element slips in here without using geometry
+
+                    for evid in event_table['event_number']:
+                        if right_now-DT < event_table['event_year'][evid] <= right_now:
+                            for block_id in event_element_slips[evid].keys():
+                                slip_time_series[block_id][k] += event_element_slips[evid][block_id]            
+                        
+                        
+
+
+
+            self.file.create_array(slip_group, 'time_series'.format(eid), time_values, 'Time steps for element time series')
+
+            
+            # create an array for each element
+            for eid in slip_time_series.keys():
+                self.file.create_array(slip_group, 'element_{}'.format(eid), np.array(slip_time_series[eid]), 'Slip time series for element {}'.format(eid))
+
+        
+            # move table
+            slip_table.move('/','slip_table')
+            print 'Finished slip time series in {} seconds'.format(time.time() - start_time_series)
+        
+        
+>>>>>>> 67d80af8e0f7cb24b0e3b489e52619b68cb70819
         #-----------------------------------------------------------------------
         # create a new group to store the event ids for each section
         #-----------------------------------------------------------------------
@@ -411,4 +505,12 @@ class VCSimData(object):
         self.file.close()
         self.file = tables.open_file(self.file_path)
     
+<<<<<<< HEAD
         print 'Total time {} seconds'.format(time.time() - start_time)
+=======
+        print 'Total time {} seconds'.format(time.time() - start_time)
+        
+        
+    
+        
+>>>>>>> 67d80af8e0f7cb24b0e3b489e52619b68cb70819
