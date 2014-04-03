@@ -70,11 +70,8 @@ class VCSimData(object):
         
         if 'events_by_section' not in self.file.root._v_groups.keys():
             self.do_events_by_section = True
-            
-        if 'slip_table' not in self.file.root._v_children.keys():
-            self.do_slip_time_series = True
         
-        if self.do_event_area or self.do_event_average_slip or self.do_event_surface_rupture_length or self.do_events_by_section or self.do_slip_time_series:
+        if self.do_event_area or self.do_event_average_slip or self.do_event_surface_rupture_length or self.do_events_by_section:
             self.calculate_additional_event_data()
 
         if 'das_id' not in self.file.root.block_info_table.colnames:
@@ -88,7 +85,6 @@ class VCSimData(object):
         
         if 'model_extents' not in self.file.root._v_children.keys():
             self.calculate_model_extents()
-            
     
     def calculate_model_extents(self):
         #-----------------------------------------------------------------------
@@ -278,7 +274,6 @@ class VCSimData(object):
         # move table2 to table
         block_info_table_new.move('/','block_info_table')
         
-        
         print 'Done! {} seconds'.format(time.time() - table_start_time)
         
         #-----------------------------------------------------------------------
@@ -288,18 +283,12 @@ class VCSimData(object):
         self.file = tables.open_file(self.file_path)
     
         print 'Total time {} seconds'.format(time.time() - start_time)
-        
-        
-        
-        
-        
     
     def calculate_additional_event_data(self):
         #-----------------------------------------------------------------------
         # get info from the original file
         #-----------------------------------------------------------------------
-        total_events   = self.file.root.event_table.nrows
-        total_elements = self.file.root.block_info_table.nrows
+        total_events = self.file.root.event_table.nrows
         #close the current file
         self.file.close()
         
@@ -342,9 +331,8 @@ class VCSimData(object):
         #-----------------------------------------------------------------------
         # create the new event_table
         #-----------------------------------------------------------------------
-        self.file   = tables.open_file(self.file_path, 'a')
+        self.file = tables.open_file(self.file_path, 'a')
         event_table = self.file.root.event_table
-
         
         # get a description of table in dictionary format
         desc_orig = event_table.description._v_colObjects
@@ -393,106 +381,6 @@ class VCSimData(object):
         # move table2 to table
         event_table_new.move('/','event_table')
         
-        
-        #-----------------------------------------------------------------------
-        # create a new group to store the slip time series for each element
-        #-----------------------------------------------------------------------
-        if self.do_slip_time_series:
-            print 'Creating slip time series table'
-            start_time_series = time.time()
-            
-            block_info_table = self.file.root.block_info_table
-            total_elements   = block_info_table.nrows
-            
-            
-            sim_years  = self.file.root.sim_years
-            start_year = sim_years[0]
-            end_year   = sim_years[1]
-            
-            # Convert slip rates from meters/second to meters/(decimal year)
-            CONVERSION = 3.15576*pow(10,7)
-            # DT = 0.1yr evaluates field every 36.5 days, but then its 50000*10 data points
-            dt         = 1.0
-            
-            # create an array of the time steps at which the slips are evaluated    
-            time_values = np.arange(start_year,end_year+dt,dt)
-            
-            #-----------------------------------------------------------------------
-            # create the new table
-            #-----------------------------------------------------------------------        
-            # description of table in dictionary format
-            desc = {'element_{}'.format(eid):tables.Float64Col(dflt=0.0) for eid in range(total_elements)}
-                
-            # create a new table with the new description
-            slip_table = self.file.create_table('/', 'tmp', desc, 'Slip Table')
-        
-            # copy the user attributes
-            event_table.attrs._f_copy(slip_table)
-        
-            # fill the rows of new table with default values
-            for i in xrange(len(time_values)):
-                slip_table.row.append()
-        
-            # flush the rows to disk
-            slip_table.flush()
-
-            slip_table.cols.event_area[:] = [ x['area'] for x in data_process_results_sorted ]
-
-
-            # STILL WORKING ON BELOW, NEVER TESTED, CERTAINLY BUGS !!!!!!!!!!!!!!!!!!!
-
-            # dict for slip rates on each element
-            rates = {int(block['block_id']):block['slip_velocity']*CONVERSION for block in block_info_table}
-            
-            # dict to store the events on each section
-            slip_time_series = {block_id:[0.0] for block_id in rates.keys()}
-            
-            # we have the sections involved in each event. we need to transpose
-            # this to events on each section
-            for evid, event_data in enumerate(data_process_results_sorted):
-                for secid in event_data['involved_sections']:
-                    try:
-                        events_by_section[secid].append(evid)
-                    except KeyError:
-                        events_by_section[secid] = [evid]
-                        
-            for k in range(len(time_values)):
-                # Already initialized slip_time_series with slip(t=0) so skip k=0
-                if k>0:
-                    # current time in simulation
-                    right_now = time_values[k]
-        
-                    # back slip all elements by subtracting the slip_rate*dt
-                    for block_id in slip_time_series.keys():
-                        last_slip = slip_time_series[block_id][k-1]
-                        this_slip = slip_rates[block_id]*CONVERSION*DT
-                        slip_time_series[block_id].append(last_slip-this_slip)
-
-                    # check if any elements slip as part of simulated event in the window of simulation time
-                    # between (current time - DT, current time), add event slips to the slip at current time 
-                    # for elements involved
-                    for evid in events_in_range['event_number']:
-                        if right_now-DT < events_in_range['event_year'][evid] <= right_now:
-                            for block_id in event_element_slips[evid].keys():
-                                slip_time_series[block_id][k] += event_element_slips[evid][block_id]            
-                        
-                        
-
-
-
-            self.file.create_array(slip_group, 'time_series'.format(eid), time_values, 'Time steps for element time series')
-
-            
-            # create an array for each element
-            for eid in slip_time_series.keys():
-                self.file.create_array(slip_group, 'element_{}'.format(eid), np.array(slip_time_series[eid]), 'Slip time series for element {}'.format(eid))
-
-        
-            # move table
-            slip_table.move('/','slip_table')
-            print 'Finished slip time series in {} seconds'.format(time.time() - start_time_series)
-        
-        
         #-----------------------------------------------------------------------
         # create a new group to store the event ids for each section
         #-----------------------------------------------------------------------
@@ -515,9 +403,8 @@ class VCSimData(object):
             for secid, evids in events_by_section.iteritems():
                 self.file.create_array(events_by_section_group, 'section_{}'.format(secid), np.array(evids), 'Events on section {}'.format(secid))
             
-            
-            
         print 'Done! {} seconds'.format(time.time() - table_start_time)
+        
         #-----------------------------------------------------------------------
         # close the file and reopen it with the new tables
         #-----------------------------------------------------------------------
@@ -525,7 +412,3 @@ class VCSimData(object):
         self.file = tables.open_file(self.file_path)
     
         print 'Total time {} seconds'.format(time.time() - start_time)
-        
-        
-    
-        
