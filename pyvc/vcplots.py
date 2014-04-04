@@ -2601,10 +2601,8 @@ def event_field_evolution(sim_file, output_directory, sim_time_range,
         else:
             event_data = events.get_event_data(['event_magnitude', 'event_year', 'event_number'], event_range=sim_time_range)
 
-        
         event_element_slips = {evid:events.get_event_element_slips(evid) for evid in event_data['event_number']}
-        slip_time_series = geometry.get_slip_time_series(event_data,event_element_slips,DT=dt,
-                                                start_year=start_year,duration=duration,section_filter=None)
+        slip_rates          = geometry.get_slip_rates()
         event_magnitudes    = event_data['event_magnitude']
         event_years         = event_data['event_year']
         event_numbers       = event_data['event_number']
@@ -2643,6 +2641,8 @@ def event_field_evolution(sim_file, output_directory, sim_time_range,
         # Find the biggest event and normalize based on these values.
         #-----------------------------------------------------------------------
 
+
+        """
         if field_type == 'displacement' and not fringes or field_type == 'gravity':
             sys.stdout.write('normalizing : ')
             sys.stdout.flush()
@@ -2671,6 +2671,7 @@ def event_field_evolution(sim_file, output_directory, sim_time_range,
                 )
             EFP.set_field(EF)
             EFP.create_field_image()
+        """
 
         
         # Convert the fault traces to lat-lon
@@ -2802,58 +2803,80 @@ def event_field_evolution(sim_file, output_directory, sim_time_range,
         #          SLIP TIME SERIES. EVENT SLIPS ARE INCLUDED IN THE 
         #          SLIP TIME SERIES.
         #-----------------------------------------------------------------------
+        #!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!
         sys.stdout.write('Total frames : {}, Frames per year : {}\n'.format(total_frames, fpy))
         sys.stdout.flush()
         for the_frame in range(total_frames):
             year_frame = the_frame%fpy
-            if year_frame == 0:
-                current_year += 1
-                events_this_year = events.get_event_data(
+            
+            # Evaluate the slips on the right endpoint of each dt interval
+            current_year += dt
+            
+            # Grab element geometry data
+            ele_getter         = itemgetter(*event_element_slips.keys())
+            element_data       = ele_getter(geometry)
+            
+            # Back-slip the elements
+            frame_slips = {bid:-dt*(the_frame+1)*slip_rates[bid] for bid in element_data['block_id']}
+            
+            # Grab the event element slips for the current frame
+            events_this_frame = events.get_event_data(
                     ['event_number', 'event_year', 'event_magnitude'],
-                    event_range = {'type':'year', 'filter':(current_year - 1, current_year)}
+                    event_range = {'type':'year', 'filter':(current_year - dt, current_year)}
                 )
             
-            progress_indicator_year = current_year - 1 - start_year + year_frame/fpy
+            progress_indicator_year = current_year - dt - start_year + year_frame/fpy
             
             evnums_this_frame = []
             sids_this_frame = []
-            for i, year in enumerate(events_this_year['event_year']):
-                if math.modf(year)[0] <= float(year_frame+1)/fpy and math.modf(year)[0] > float(year_frame)/fpy:
-                    evnums_this_frame.append(events_this_year['event_number'][i])
-                    sids_this_frame.append(geometry.sections_with_elements(list(events.get_event_elements(events_this_year['event_number'][i]))))
-                    cumulative_magnitudes.append(events_this_year['event_magnitude'][i])
-            sids_this_frame = set( itertools.chain(*sids_this_frame) )
+            
+            # Gather information for events in this frame
+            if len(events_this_frame.keys()) >= 1:
+                for i, year in enumerate(events_this_frame['event_year']):
+                    evnums_this_frame.append(events_this_frame['event_number'][i])
+                    sids_this_frame.append(geometry.sections_with_elements(list(events.get_event_elements(events_this_frame['event_number'][i]))))
+                    cumulative_magnitudes.append(events_this_frame['event_magnitude'][i])
+
+                sids_this_frame = set( itertools.chain(*sids_this_frame) )
+
 
             sys.stdout.write('frame {} (year {}) of {} ({})\n'.format(the_frame, progress_indicator_year, total_frames, total_years))
             
-            
-            #-------------------------------------------------------------------
-            # Apply slip for the current frame, unless it is frame zero.
             #-------------------------------------------------------------------
             # Try and load the fields
-            if the_frame > 0:
-                field_values_loaded = EF.load_field_values('{}{}_'.format(field_values_directory, the_frame))
-                if field_values_loaded:
-                    sys.stdout.write('loaded '.format(the_frame))
-                    # If they havent been saved then we need to calculate them
-                elif not field_values_loaded:
-                    sys.stdout.write('processing '.format(the_frame))
-                    sys.stdout.flush()
+            #-------------------------------------------------------------------
+            field_values_loaded = EF.load_field_values('{}{}_'.format(field_values_directory, the_frame))
+                
+            if field_values_loaded:
+                sys.stdout.write('loaded '.format(the_frame))
+            # If they havent been saved then we need to calculate them
+            elif not field_values_loaded:
+                sys.stdout.write('processing '.format(the_frame))
+                sys.stdout.flush()
+
+                #-------------------------------------------------------------------
+                # If there are any events, apply event slips to the elements 
+                #-------------------------------------------------------------------
+                if len(evnums_this_frame) >= 1:
+                    # Loop over the events in the current frame    
+                    for evid in evnums_this_frame:
+                        # For each element in the model, add any co-seismic slips
+                        for bid in frame_slips.keys():
+                            frame_slips[bid] += float(event_element_slips[evid][bid])
                         
-                    # the_frame is 0-based index for each time step in the slip_time_series    
-                    element_slips  = {block_id:slip_time_series[block_id][the_frame] for block_id in slip_time_series.keys()}
-                    ele_getter         = itemgetter(*event_element_slips.keys())
-                    element_data = ele_getter(geometry)
-                    
-                    sys.stdout.write('{} elements :: '.format(len(element_slips)))
-                    sys.stdout.flush()
-                        
-                    EF.calculate_field_values(
-                            element_data,
-                            element_slips,
-                            cutoff=cutoff,
-                            save_file_prefix='{}{}_'.format(field_values_directory, the_frame),
-                    )
+    
+                sys.stdout.write('{} elements :: '.format(len(element_slips)))
+                sys.stdout.flush()
+
+                #---------------------------------------------------------------------
+                # Now pass the accumulated slips to the greens functions for plotting
+                #---------------------------------------------------------------------
+                EF.calculate_field_values(
+                                element_data,
+                                frame_slips,
+                                cutoff=cutoff,
+                                save_file_prefix='{}{}_'.format(field_values_directory, the_frame),
+                )
             
 
             sys.stdout.write('\n')

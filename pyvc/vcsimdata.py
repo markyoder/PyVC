@@ -411,5 +411,5 @@ class VCSimData(object):
         self.file.close()
         self.file = tables.open_file(self.file_path)
     
-print 'Total time {} seconds'.format(time.time() - start_time)
+        print 'Total time {} seconds'.format(time.time() - start_time)
     
