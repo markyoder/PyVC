@@ -988,8 +988,8 @@ class VCGravityFieldPlotter(object):
             'cb_height':            20.0,
             'cb_margin_t':          10.0,
          #min/max gravity change labels for colorbar (in microgals)
-            'cbar_min':             -80,
-            'cbar_max':             80
+            'cbar_min':             -100,
+            'cbar_max':             100
         }
         
         #-----------------------------------------------------------------------

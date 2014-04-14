@@ -83,17 +83,24 @@ class VCGeometry(VCSys):
     
     
     
-    def get_slip_rates(self,section_filter=None):
+    def get_slip_rates(self,section_filter=None,per_year=True):
         rates = {}
+        # Convert slip rates from meters/second to meters/(decimal year)
+        CONVERSION = 3.15576*pow(10,7)
         
         if section_filter is not None:
-            bis={}
             for secid in section_filter['filter']:
                 for block in self.geometry_data.read_where('{type} == {value}'.format(type='section_id', value=secid)):
-                    rates[int(block['block_id'])] = block['slip_velocity']
+                    if per_year:
+                        rates[int(block['block_id'])] = block['slip_velocity']*CONVERSION
+                    else:
+                        rates[int(block['block_id'])] = block['slip_velocity']
         else:
             for block in self.geometry_data:
-                rates[int(block['block_id'])] = block['slip_velocity']
+                if per_year:
+                    rates[int(block['block_id'])] = block['slip_velocity']*CONVERSION
+                else:
+                    rates[int(block['block_id'])] = block['slip_velocity']
 
         return rates
         

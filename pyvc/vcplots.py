@@ -2551,9 +2551,10 @@ def event_return_map(sim_file, output_file=None, event_range=None, section_filte
 #-------------------------------------------------------------------------------
 def event_field_evolution(sim_file, output_directory, sim_time_range,
     field_type='gravity', fringes=True, padding=0.08, cutoff=None,
-    animation_target_length=60.0, animation_fps = 30.0,
-    min_mag_marker = 6.5, start_year = 0.0, duration=100.0, dt=0.1,force_plot=False,section_filter=None):
+    animation_target_length=50.0, animation_fps = 20.0,
+    min_mag_marker = 6.5, start_year = 0.0, duration=100.0,force_plot=False,section_filter=None):
     
+    # ----------------------------- Initializing --------------------------
     sys.stdout.write('Initializing animation :: ')
     sys.stdout.flush()
     
@@ -2571,8 +2572,6 @@ def event_field_evolution(sim_file, output_directory, sim_time_range,
         os.makedirs(field_values_directory)
     if not os.path.exists(frame_images_directory):
         os.makedirs(frame_images_directory)
-
-    # animation properties
 
     #---------------------------------------------------------------------------
     # Open the data file. It needs to stay open while we do the animation.
@@ -2595,18 +2594,23 @@ def event_field_evolution(sim_file, output_directory, sim_time_range,
         base_lon    = geometry.base_lon
         fault_traces= geometry.get_fault_traces()
         
-        # Get event information
-        if section_filter is not None:
-            event_data = events.get_event_data(['event_magnitude', 'event_year', 'event_number'], event_range=sim_time_range,                          section_filter=section_filter)
-        else:
-            event_data = events.get_event_data(['event_magnitude', 'event_year', 'event_number'], event_range=sim_time_range)
+        # Get event information, filter by section if specified
+        event_data = events.get_event_data(['event_magnitude', 'event_year', 'event_number'], event_range=sim_time_range,                          section_filter=section_filter)
 
+
+        # Get elements and slips for events
         event_element_slips = {evid:events.get_event_element_slips(evid) for evid in event_data['event_number']}
-        slip_rates          = geometry.get_slip_rates()
+        
+        # The blocks in slip_rates define the elements that are used for the plotting
+        slip_rates          = geometry.get_slip_rates(section_filter=section_filter,per_year=True)
+
+
+        # Extract relevant data from events inthe time range of the animation
         event_magnitudes    = event_data['event_magnitude']
         event_years         = event_data['event_year']
         event_numbers       = event_data['event_number']
         current_year        = start_year 
+        dt                  = float(duration)/(float(animation_target_length)*animation_fps)
         
         # These are the event years shifted so the begin at zero.
         _event_years = [y - start_year for y in event_years]
@@ -2618,14 +2622,15 @@ def event_field_evolution(sim_file, output_directory, sim_time_range,
         
         # Calculate the frames per year and the total number of frames
         #     total years start at start_year and ends 5 years after the last event
-        N_time_steps= len(slip_time_series[slip_time_series.keys()[0]])
-        total_years = N_time_steps*dt
-        fpy         = math.ceil(animation_target_length*animation_fps/total_years)
-        total_frames= int(fpy * total_years)
+        #N_time_steps = duration/float(dt)
+        total_years  = float(duration)
+        fpy          = math.ceil(animation_target_length*animation_fps/total_years)
+        total_frames = int(fpy * total_years)
         
-        if total_frames != N_time_steps:
-            sys.stdout.write('\nHAD TO SET NUM FRAMES MANUALLY!')
-            total_frames = N_time_steps
+        
+        #if total_frames != N_time_steps:
+        #    sys.stdout.write('\nHAD TO SET NUM FRAMES MANUALLY!')
+        #    total_frames = N_time_steps
         
         # Instantiate the field and the plotter
         if field_type == 'displacement':
@@ -2640,8 +2645,6 @@ def event_field_evolution(sim_file, output_directory, sim_time_range,
         #-----------------------------------------------------------------------
         # Find the biggest event and normalize based on these values.
         #-----------------------------------------------------------------------
-
-
         """
         if field_type == 'displacement' and not fringes or field_type == 'gravity':
             sys.stdout.write('normalizing : ')
@@ -2672,7 +2675,7 @@ def event_field_evolution(sim_file, output_directory, sim_time_range,
             EFP.set_field(EF)
             EFP.create_field_image()
         """
-
+        
         
         # Convert the fault traces to lat-lon
         fault_traces_latlon = {}
@@ -2804,28 +2807,37 @@ def event_field_evolution(sim_file, output_directory, sim_time_range,
         #          SLIP TIME SERIES.
         #-----------------------------------------------------------------------
         #!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!
+        
         sys.stdout.write('Total frames : {}, Frames per year : {}\n'.format(total_frames, fpy))
         sys.stdout.flush()
         for the_frame in range(total_frames):
             year_frame = the_frame%fpy
-            
+            """
             # Evaluate the slips on the right endpoint of each dt interval
             current_year += dt
             
-            # Grab element geometry data
-            ele_getter         = itemgetter(*event_element_slips.keys())
+            # Grab element geometry data, for elements specified in slip_rates
+            ele_getter         = itemgetter(*slip_rates.keys())
             element_data       = ele_getter(geometry)
             
-            # Back-slip the elements
-            frame_slips = {bid:-dt*(the_frame+1)*slip_rates[bid] for bid in element_data['block_id']}
-            
-            # Grab the event element slips for the current frame
-            events_this_frame = events.get_event_data(
+            # Back-slip the elements. If this is first frame, get the current slip by
+            #     summing over seismic history up to present
+            if the_frame==0:
+                frame_slips       = {bid:-1.0*current_year*float(slip_rates[bid]) for bid in slip_rates.keys()}
+                
+                events_this_frame = events.get_event_data(
                     ['event_number', 'event_year', 'event_magnitude'],
-                    event_range = {'type':'year', 'filter':(current_year - dt, current_year)}
-                )
+                    event_range = {'type':'year', 'filter':(0, current_year)})
+            else:
+                # Back slip by 1 time step
+                frame_slips       = {bid:-1.0*dt*float(slip_rates[bid]) for bid in slip_rates.keys()}
             
-            progress_indicator_year = current_year - dt - start_year + year_frame/fpy
+                # Grab the event element slips for the current frame
+                events_this_frame = events.get_event_data(
+                    ['event_number', 'event_year', 'event_magnitude'],
+                    event_range = {'type':'year', 'filter':(current_year - dt, current_year)})
+            
+            progress_indicator_year = current_year - start_year
             
             evnums_this_frame = []
             sids_this_frame = []
@@ -2838,7 +2850,7 @@ def event_field_evolution(sim_file, output_directory, sim_time_range,
                     cumulative_magnitudes.append(events_this_frame['event_magnitude'][i])
 
                 sids_this_frame = set( itertools.chain(*sids_this_frame) )
-
+            
 
             sys.stdout.write('frame {} (year {}) of {} ({})\n'.format(the_frame, progress_indicator_year, total_frames, total_years))
             
@@ -2860,12 +2872,12 @@ def event_field_evolution(sim_file, output_directory, sim_time_range,
                 if len(evnums_this_frame) >= 1:
                     # Loop over the events in the current frame    
                     for evid in evnums_this_frame:
-                        # For each element in the model, add any co-seismic slips
-                        for bid in frame_slips.keys():
+                        # For element in the event, add any co-seismic slips
+                        for bid in event_element_slips[evid].keys():
                             frame_slips[bid] += float(event_element_slips[evid][bid])
                         
     
-                sys.stdout.write('{} elements :: '.format(len(element_slips)))
+                sys.stdout.write('{} elements :: '.format(len(frame_slips)))
                 sys.stdout.flush()
 
                 #---------------------------------------------------------------------
@@ -2880,12 +2892,81 @@ def event_field_evolution(sim_file, output_directory, sim_time_range,
             
 
             sys.stdout.write('\n')
+            """
+            # The current time, evaluated on left side of each time interval
+            frame_time = float(start_year + the_frame*dt)
+            
+            if year_frame == 0:
+                current_year += 1
+                events_this_year = events.get_event_data(
+                    ['event_number', 'event_year', 'event_magnitude'],
+                    event_range = {'type':'year', 'filter':(current_year - 1, current_year)}
+                )
+                
+            #-------------------------------------------------------------------    
+            # apply back slip to all elements
+            #-------------------------------------------------------------------
+            
+            frame_slips  = {bid:-1.0*frame_time*float(slip_rates[bid]) for bid in slip_rates.keys()}
+
+            progress_indicator_year = current_year - 1 - start_year + year_frame/fpy
+            
+            evnums_this_frame = []
+            sids_this_frame = []
+            for i, year in enumerate(events_this_year['event_year']):
+                if math.modf(year)[0] <= float(year_frame+1)/fpy and math.modf(year)[0] > float(year_frame)/fpy:
+                    this_evid = events_this_year['event_number'][i]
+                    
+                    #-------------------------------------------------------
+                    # Grab the event element slips and add to the back slip 
+                    for bid in event_element_slips[this_evid].keys():
+                        frame_slips[bid] += float(event_element_slips[this_evid][bid])
+                    
+                    
+                    evnums_this_frame.append(this_evid)
+                    sids_this_frame.append(geometry.sections_with_elements(list(events.get_event_elements(this_evid))))
+                    cumulative_magnitudes.append(this_evid)
+            sids_this_frame = set( itertools.chain(*sids_this_frame) )
+
+            sys.stdout.write('frame {} (year {}) of {} ({})\n'.format(the_frame, progress_indicator_year, total_frames, total_years))
+
+            
+            #-------------------------------------------------------------------
+            # Load or calculate all of the data for the current frame.
+            #-------------------------------------------------------------------
+
+            # Try and load the fields
+            field_values_loaded = EF.load_field_values('{}{}_'.format(field_values_directory, the_frame))
+            if field_values_loaded:
+                sys.stdout.write('loaded frame {}'.format(the_frame))
+            # If they havent been saved then we need to calculate them
+            elif not field_values_loaded:
+                sys.stdout.write('processing frame {}'.format(str(the_frame)))
+                sys.stdout.flush()
+                
+                ele_getter = itemgetter(*frame_slips.keys())
+                frame_element_data = ele_getter(geometry)
+            
+                sys.stdout.write(', {} elements :: '.format(len(frame_slips.keys())))
+                sys.stdout.flush()
+                
+                EF.calculate_field_values(
+                    frame_element_data,
+                    frame_slips,
+                    cutoff=cutoff,
+                    save_file_prefix='{}{}_'.format(field_values_directory, the_frame)
+                )
+                
+
+            sys.stdout.write('\n')
+
+            #=====================================================================
             
             #-------------------------------------------------------------------
             # State variables that need to be maintained pre-plotting.
             #-------------------------------------------------------------------
             
-            # Big magnitude event label fade state
+            # Big magnitude event label 
             for elme in event_large_magnitude_evnums:
                 if elme in evnums_this_frame:
                     large_event_label_states[elme] = 1.0
