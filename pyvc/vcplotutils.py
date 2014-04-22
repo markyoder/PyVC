@@ -988,8 +988,8 @@ class VCGravityFieldPlotter(object):
             'cb_height':            20.0,
             'cb_margin_t':          10.0,
          #min/max gravity change labels for colorbar (in microgals)
-            'cbar_min':             -100,
-            'cbar_max':             100
+            'cbar_min':             -1000,
+            'cbar_max':             1000
         }
         
         #-----------------------------------------------------------------------
@@ -1101,14 +1101,15 @@ class VCGravityFieldPlotter(object):
         #-----------------------------------------------------------------------
         # Fig3 is the land/sea mask.
         #-----------------------------------------------------------------------
-        """fig3 = mplt.figure(figsize=(mwi, mhi), dpi=plot_resolution)
+        """
+        fig3 = mplt.figure(figsize=(mwi, mhi), dpi=plot_resolution)
         self.m3.ax = fig3.add_axes((0,0,1,1))
         #self.m3.fillcontinents(color='#000000', lake_color='#ffffff')
         dG_abs = np.fabs(dG_transformed)
         #print np.amin(dG_abs), np.amax(dG_abs), 1e6*np.amin(dG_abs), np.amax(dG_abs)*1e-1
         im = self.m3.imshow(dG_abs, cmap=mplt.get_cmap('gray_r'), norm=mcolor.Normalize(vmin=1e6*np.amin(dG_abs), vmax=np.amax(dG_abs)*1e-1, clip=True))
         
-        fig3.savefig('local/test_mask.png', format='png', dpi=plot_resolution)
+        #fig3.savefig('local/test_mask.png', format='png', dpi=plot_resolution)
         """
         #-----------------------------------------------------------------------
         # Composite fig 1 - 3 together
@@ -1136,9 +1137,9 @@ class VCGravityFieldPlotter(object):
         # FIGURE 2 canvas.tostring_argb give pixmap in ARGB mode. Roll the ALPHA channel to have it in RGBA mode
         buf = np.roll ( buf, 3, axis = 2 )
         im2 = Image.fromstring( "RGBA", ( w ,h ), buf.tostring( ) )
-        
+        """
         # FIGURE 3 draw the renderer
-        """fig3.canvas.draw()
+        fig3.canvas.draw()
         
         # FIGURE 3 Get the RGBA buffer from the figure
         w,h = fig3.canvas.get_width_height()
@@ -1162,6 +1163,7 @@ class VCGravityFieldPlotter(object):
         #mask = Image.new("L", (w,h), 'black')
         # The final composited image.
         #return  Image.composite(im1, im2, mask)
+        #return  Image.composite(im1, im2)
         return im2
 
 

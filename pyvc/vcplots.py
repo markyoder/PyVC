@@ -2595,7 +2595,7 @@ def event_field_evolution(sim_file, output_directory, sim_time_range,
         fault_traces= geometry.get_fault_traces()
         
         # Get event information, filter by section if specified
-        event_data = events.get_event_data(['event_magnitude', 'event_year', 'event_number'], event_range=sim_time_range,                          section_filter=section_filter)
+        event_data = events.get_event_data(['event_magnitude', 'event_year', 'event_number'], event_range=sim_time_range,section_filter=section_filter)
 
 
         # Get elements and slips for events
@@ -3386,6 +3386,414 @@ def event_field_evolution(sim_file, output_directory, sim_time_range,
         proc.wait()
 
 
+
+#-------------------------------------------------------------------------------
+# Average the field of many events
+#-------------------------------------------------------------------------------
+def average_field(sim_file, output_directory, event_ids,
+    field_type='gravity', fringes=True, padding=0.08, cutoff=None,
+    pre=True,buffer=5.0,force_plot=False,section_filter=None):
+    
+    # ----------------------------- Initializing --------------------------
+    sys.stdout.write('Initializing animation :: ')
+    sys.stdout.flush()
+    
+    # create the animation dir if needed
+    if not os.path.exists(output_directory):
+        os.makedirs(output_directory)
+    
+    if not output_directory.endswith('/'):
+        output_directory += '/'
+    
+    # create the animation subdirs if needed
+    field_values_directory = '{}field_values/'.format(output_directory)
+    frame_images_directory = '{}field_images/'.format(output_directory)
+    if not os.path.exists(field_values_directory):
+        os.makedirs(field_values_directory)
+    if not os.path.exists(frame_images_directory):
+        os.makedirs(frame_images_directory)
+
+    #---------------------------------------------------------------------------
+    # Open the data file. It needs to stay open while we do the animation.
+    #---------------------------------------------------------------------------
+    with VCSimData() as sim_data:
+        # open the simulation data file
+        sim_data.open_file(sim_file)
+        
+        # instantiate the vc classes passing in an instance of the VCSimData
+        # class
+        events      = VCEvents(sim_data)
+        geometry    = VCGeometry(sim_data)
+        
+        # Get global information about the simulations geometry
+        min_lat     = geometry.min_lat
+        max_lat     = geometry.max_lat
+        min_lon     = geometry.min_lon
+        max_lon     = geometry.max_lon
+        base_lat    = geometry.base_lat
+        base_lon    = geometry.base_lon
+        fault_traces= geometry.get_fault_traces()
+    
+        # ------------------------------------------
+        # The blocks in slip_rates define the elements that are used for the plotting
+        slip_rates  = geometry.get_slip_rates(section_filter=section_filter,per_year=True)
+
+        # ------------------------------------------
+        # Grab rows from event table for each specified event
+        avg_event_data  = events.get_event_data_from_evnums(event_ids,['event_magnitude', 'event_year', 'event_number'],section_filter=section_filter)
+        
+        # Extract relevant data from events inthe time range of the animation
+        avg_event_magnitudes    = avg_event_data['event_magnitude']
+        avg_event_years         = avg_event_data['event_year']
+        avg_event_numbers       = avg_event_data['event_number']
+        
+        # These are the event years shifted by the buffer length (e.g. 5 years)
+        if pre:
+            _event_years = [y - buffer for y in avg_event_years]
+        else:
+            _event_years = [y + buffer for y in avg_event_years]
+            
+        
+        # -------------------------------------------------------------
+        # Instantiate the field and the plotter
+        # -------------------------------------------------------------
+        if field_type == 'displacement':
+            EF = vcutils.VCDisplacementField(min_lat, max_lat, min_lon, max_lon, base_lat, base_lon, padding=padding)
+            EFP = vcplotutils.VCDisplacementFieldPlotter(EF.min_lat, EF.max_lat, EF.min_lon, EF.max_lon)
+            EFP.calculate_look_angles(geometry[:])
+        elif field_type == 'gravity':
+            EF = vcutils.VCGravityField(min_lat, max_lat, min_lon, max_lon, base_lat, base_lon, padding=padding)
+            EFP = vcplotutils.VCGravityFieldPlotter(EF.min_lat, EF.max_lat, EF.min_lon, EF.max_lon)
+        
+        
+        # -------------------------------------------------------------
+        # Loop over each event, and calculate or load the field
+        # -------------------------------------------------------------
+        for k in range(len(event_ids)):
+            evnum               = event_ids[k]
+            _ev_year            = _event_years[k]
+            #event_sections      = geometry.sections_with_elements(event_element_slips[evnum].keys())
+            
+            
+            #-------------------------------------------------------------------    
+            # Apply back slip to all elements, up to time of this event
+            frame_slips  = {bid:-1.0*_ev_year*float(slip_rates[bid]) for bid in slip_rates.keys()}
+
+            #--------------------------------------------------------------
+            # Set up the elements to evaluate Green's functions
+            ele_getter         = itemgetter(*frame_slips.keys())
+            frame_element_data = ele_getter(geometry)
+            
+            #-------------------------------------------------------
+            # Grab all events before and including the current event at _ev_year
+            prev_filter         = {'type':'year', 'filter':(0.0,_ev_year)}
+            all_events          = events.get_event_data(['event_magnitude', 'event_year', 'event_number'], event_range=prev_filter,section_filter=section_filter)
+
+            #-------------------------------------------------------
+            # Grab the event element slips for all previous events and add to the back slip            
+            for evid in all_events['event_number']:
+                # Grab all event slips up to this event year on specified sections 
+                event_element_slips = events.get_event_element_slips(evid)
+                
+
+                for bid in event_element_slips.keys():
+                    frame_slips[bid] += float(event_element_slips[bid])
+        
+
+            sys.stdout.write('event {}, year {}\n'.format(evnum, _ev_year))
+
+        
+            #-------------------------------------------------------------------
+            # Load or calculate all of the data for the current frame.
+            #-------------------------------------------------------------------
+
+            # Try and load the fields
+            field_values_loaded = EF.load_field_values('{}{}_'.format(field_values_directory, evnum))
+            if field_values_loaded:
+                sys.stdout.write('loaded event {}'.format(evnum))
+            # If they havent been saved then we need to calculate them
+            elif not field_values_loaded:
+                sys.stdout.write('processing event {}'.format(evnum))
+                sys.stdout.flush()
+            
+                sys.stdout.write(', {} elements :: '.format(len(frame_slips.keys())))
+                sys.stdout.flush()
+                
+                EF.calculate_field_values(
+                    frame_element_data,
+                    frame_slips,
+                    cutoff=cutoff,
+                    save_file_prefix='{}{}_'.format(field_values_directory, evnum)
+                )
+                
+
+        sys.stdout.write('\n')
+        
+        # !!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!
+        
+        sys.stdout.write('map image : ')
+        sys.stdout.flush()
+
+        map_image = EFP.create_field_image(fringes=fringes)
+
+        sys.stdout.write('map overlay : ')
+        sys.stdout.flush()
+        # Convert the fault traces to lat-lon
+        fault_traces_latlon = {}
+        for secid in fault_traces.iterkeys():
+             fault_traces_latlon[secid] = zip(*[(lambda y: (y.lat(),y.lon()))(EF.convert.convert2LatLon(quakelib.Vec3(x[0], x[1], x[2]))) for x in fault_traces[secid]])
+
+        #---------------------------------------------------------------------------
+        # Plot all of the geographic info on top of the displacement map image.
+        #---------------------------------------------------------------------------
+        
+        # Grab all of the plot properties that we will need.
+        # properties that are fringes dependent
+        if fringes and field_type == 'displacement':
+            cmap            = EFP.dmc['cmap_f']
+            coastline_color = EFP.dmc['coastline_color_f']
+            country_color   = EFP.dmc['country_color_f']
+            state_color     = EFP.dmc['state_color_f']
+            fault_color     = EFP.dmc['fault_color_f']
+            map_tick_color  = EFP.dmc['map_tick_color_f']
+            map_frame_color = EFP.dmc['map_frame_color_f']
+            grid_color      = EFP.dmc['grid_color_f']
+            cb_fontcolor    = EFP.dmc['cb_fontcolor_f']
+        else:
+            cmap            = EFP.dmc['cmap']
+            coastline_color = EFP.dmc['coastline_color']
+            country_color   = EFP.dmc['country_color']
+            state_color     = EFP.dmc['state_color']
+            fault_color     = EFP.dmc['fault_color']
+            map_tick_color  = EFP.dmc['map_tick_color']
+            map_frame_color = EFP.dmc['map_frame_color']
+            grid_color      = EFP.dmc['grid_color']
+            cb_fontcolor    = EFP.dmc['cb_fontcolor']
+        
+        # properties that are not fringes dependent
+        boundary_width  = EFP.dmc['boundary_width']
+        coastline_width = EFP.dmc['coastline_width']
+        country_width   = EFP.dmc['country_width']
+        state_width     = EFP.dmc['state_width']
+        river_width     = EFP.dmc['river_width']
+        fault_width     = EFP.dmc['fault_width']
+        map_frame_width = EFP.dmc['map_frame_width']
+        map_fontsize    = EFP.dmc['map_fontsize']
+        arrow_inset     = EFP.dmc['arrow_inset']
+        arrow_fontsize  = EFP.dmc['arrow_fontsize']
+        cb_fontsize     = EFP.dmc['cb_fontsize']
+        cb_height       = EFP.dmc['cb_height']
+        cb_margin_t     = EFP.dmc['cb_margin_t']
+        grid_width      = EFP.dmc['grid_width']
+        num_grid_lines  = EFP.dmc['num_grid_lines']
+        font            = EFP.dmc['font']
+        font_bold       = EFP.dmc['font_bold']
+
+        map_resolution  = EFP.dmc['map_resolution']
+        map_projection  = EFP.dmc['map_projection']
+        plot_resolution = EFP.dmc['plot_resolution']
+
+        # The sizing for the image is tricky. The aspect ratio of the plot is fixed,
+        # so we cant set all of margins to whatever we want. We will set the anchor
+        # to the top, left margin position. Then scale the image based on the
+        # bottom/right margin, whichever is bigger.
+        
+        mw = EF.lons_1d.size
+        mh = EF.lats_1d.size
+
+        if mh > mw:
+            ph = 768.0
+            pw = mw + 70.0 + 40.0
+        else:
+            pw = 790.0
+            ph = mh + 70.0 + 40.0
+
+        width_frac = mw/pw
+        height_frac = mh/ph
+        left_frac = 70.0/pw
+        bottom_frac = 70.0/ph
+
+        pwi = pw/plot_resolution
+        phi = ph/plot_resolution
+
+        fig4 = mplt.figure(figsize=(pwi, phi), dpi=plot_resolution)
+
+        #---------------------------------------------------------------------------
+        # m4, fig4 is all of the boundary data.
+        #---------------------------------------------------------------------------
+        m4 = Basemap(
+            llcrnrlon=EF.min_lon,
+            llcrnrlat=EF.min_lat,
+            urcrnrlon=EF.max_lon,
+            urcrnrlat=EF.max_lat,
+            lat_0=(EF.max_lat+EF.min_lat)/2.0,
+            lon_0=(EF.max_lon+EF.min_lon)/2.0,
+            resolution=map_resolution,
+            projection=map_projection,
+            suppress_ticks=True
+        )
+        m4.ax = fig4.add_axes((left_frac,bottom_frac,width_frac,height_frac))
+        
+        # draw coastlines, edge of map.
+        m4.drawcoastlines(color=coastline_color, linewidth=coastline_width)
+        
+        # draw countries
+        m4.drawcountries(linewidth=country_width, color=country_color)
+        
+        # draw states
+        m4.drawstates(linewidth=state_width, color=state_color)
+        
+        # draw parallels.
+        parallels = np.linspace(EFP.lats_1d.min(), EFP.lats_1d.max(), num_grid_lines+1)
+        m4_parallels = m4.drawparallels(parallels, labels=[1,0,0,0], fontsize=map_fontsize, color=grid_color, fontproperties=font, fmt='%.2f', linewidth=grid_width, dashes=[1, 10])
+        
+        # draw meridians
+        meridians = np.linspace(EFP.lons_1d.min(), EFP.lons_1d.max(), num_grid_lines+1)
+        m4_meridians = m4.drawmeridians(meridians, labels=[0,0,1,0], fontsize=map_fontsize, color=grid_color, fontproperties=font, fmt='%.2f', linewidth=grid_width, dashes=[1, 10])
+
+        if field_type == 'displacement':
+            # draw the azimuth look arrow
+            az_width_frac    = 50.0/pw
+            az_height_frac   = 50.0/ph
+            az_left_frac     = (70.0 + mw - arrow_inset - pw*az_width_frac)/pw
+            az_bottom_frac   = (70.0 + mh - arrow_inset - ph*az_height_frac)/ph
+            az_ax = fig4.add_axes((az_left_frac,az_bottom_frac,az_width_frac,az_height_frac))
+
+            az_ax.set_xlim((0,1.0))
+            az_ax.set_ylim((0,1.0))
+            for item in az_ax.yaxis.get_ticklabels() + az_ax.xaxis.get_ticklabels() + az_ax.yaxis.get_ticklines() + az_ax.xaxis.get_ticklines():
+                item.set_alpha(0)
+
+            az_arrow_start_x    = 0.5 - (0.8/2.0)*math.sin(EFP.look_azimuth)
+            az_arrow_start_y    = 0.5 - (0.8/2.0)*math.cos(EFP.look_azimuth)
+            az_arrow_dx      = 0.8*math.sin(EFP.look_azimuth)
+            az_arrow_dy      = 0.8*math.cos(EFP.look_azimuth)
+
+            az_ax.arrow( az_arrow_start_x , az_arrow_start_y, az_arrow_dx, az_arrow_dy, head_width=0.1, head_length= 0.1, overhang=0.1, shape='right', length_includes_head=True, lw=1.0, fc='k' )
+            az_ax.add_line(mlines.Line2D((0.5,0.5), (0.5,0.8), lw=1.0, ls=':', c='k', dashes=(2.0,1.0)))
+            az_ax.add_patch(mpatches.Arc((0.5,0.5), 0.3, 0.3, theta1=90.0 - EF.convert.rad2deg(EFP.look_azimuth), theta2=90.0, fc='none', lw=1.0, ls='dotted', ec='k'))
+            az_ax.text(1.0, 1.0, 'az = {:0.1f}{}'.format(EF.convert.rad2deg(EFP.look_azimuth),r'$^{\circ}$'), fontproperties=font_bold, size=arrow_fontsize, ha='right', va='top')
+
+            # draw the altitude look arrow
+            al_width_frac    = 50.0/pw
+            al_height_frac   = 50.0/ph
+            al_left_frac     = (70.0 + mw - arrow_inset - pw*az_width_frac)/pw
+            al_bottom_frac   = (70.0 + mh - arrow_inset - ph*az_height_frac - ph*al_height_frac)/ph
+            al_ax = fig4.add_axes((al_left_frac,al_bottom_frac,al_width_frac,al_height_frac))
+
+            al_ax.set_xlim((0,1.0))
+            al_ax.set_ylim((0,1.0))
+            for item in al_ax.yaxis.get_ticklabels() + al_ax.xaxis.get_ticklabels() + al_ax.yaxis.get_ticklines() + al_ax.xaxis.get_ticklines():
+                item.set_alpha(0)
+
+            al_arrow_start_x    = 0.1 + 0.8*math.cos(EFP.look_elevation)
+            al_arrow_start_y    = 0.1 + 0.8*math.sin(EFP.look_elevation)
+            al_arrow_dx      = -0.8*math.cos(EFP.look_elevation)
+            al_arrow_dy      = -0.8*math.sin(EFP.look_elevation)
+
+            al_ax.arrow( al_arrow_start_x , al_arrow_start_y, al_arrow_dx, al_arrow_dy, head_width=0.1, head_length= 0.1, overhang=0.1, shape='left', length_includes_head=True, lw=1.0, fc='k' )
+            al_ax.add_line(mlines.Line2D((0.1,0.9), (0.1,0.1), lw=1.0, ls=':', c='k', dashes=(2.0,1.0)))
+            al_ax.add_patch(mpatches.Arc((0.1,0.1), 0.5, 0.5, theta1=0.0, theta2=EF.convert.rad2deg(EFP.look_elevation), fc='none', lw=1.0, ls='dotted', ec='k'))
+            al_ax.text(1.0, 1.0, 'al = {:0.1f}{}'.format(EF.convert.rad2deg(EFP.look_elevation),r'$^{\circ}$'), fontproperties=font_bold, size=arrow_fontsize, ha='right', va='top')
+            
+            # draw the box with the magnitude
+            mag_width_frac    = 50.0/pw
+            mag_height_frac   = 10.0/ph
+            mag_left_frac     = (70.0 + mw - arrow_inset - pw*az_width_frac)/pw
+            mag_bottom_frac   = (70.0 + mh - arrow_inset - ph*az_height_frac  - ph*az_height_frac - ph*mag_height_frac)/ph
+            mag_ax = fig4.add_axes((mag_left_frac,mag_bottom_frac,mag_width_frac,mag_height_frac))
+
+            mag_ax.set_xlim((0,1.0))
+            mag_ax.set_ylim((0,1.0))
+            for item in mag_ax.yaxis.get_ticklabels() + mag_ax.xaxis.get_ticklabels() + mag_ax.yaxis.get_ticklines() + mag_ax.xaxis.get_ticklines():
+                item.set_alpha(0)
+            
+            mag_ax.text(0.5, 0.5, 'm = {:0.3f}'.format(float(event_data['event_magnitude'])), fontproperties=font_bold, size=arrow_fontsize, ha='center', va='center')
+
+        # add the displacement map image to the plot
+        m4.imshow(map_image, origin='upper')
+        
+        # print faults on lon-lat plot
+        for sid, sec_trace in fault_traces_latlon.iteritems():
+            trace_Xs, trace_Ys = m4(sec_trace[1], sec_trace[0])
+            
+            if sid in event_sections:
+                linewidth = fault_width + 3
+            else:
+                linewidth = fault_width
+
+            m4.plot(trace_Xs, trace_Ys, color=fault_color, linewidth=linewidth, solid_capstyle='round', solid_joinstyle='round')
+
+        #plot the cb
+        left_frac = 70.0/pw
+        bottom_frac = (70.0 - cb_height - cb_margin_t)/ph
+        width_frac = mw/pw
+        height_frac = cb_height/ph
+        
+        cb_ax = fig4.add_axes((left_frac,bottom_frac,width_frac,height_frac))
+        norm = EFP.norm
+        cb = mcolorbar.ColorbarBase(cb_ax, cmap=cmap,
+               norm=norm,
+               orientation='horizontal')
+        if field_type == 'displacement':
+            if fringes:
+                cb_title = 'Displacement [m]'
+            else:
+                cb_title = 'Total displacement [m]'
+
+        elif field_type == 'gravity':
+            cb_title        = r'Gravity changes [$\mu gal$]'
+            # Make first and last ticks on colorbar be <MIN and >MAX
+            cb_tick_labs    = [item.get_text() for item in cb_ax.get_xticklabels()]
+            cb_tick_labs[0] = '<'+cb_tick_labs[0]
+            cb_tick_labs[-1]= '>'+cb_tick_labs[-1]
+            cb_ax.set_xticklabels(cb_tick_labs)
+
+        cb_ax.set_title(cb_title, fontproperties=font, color=cb_fontcolor, size=cb_fontsize, va='top', ha='left', position=(0,-1.5) )
+
+        for label in cb_ax.xaxis.get_ticklabels():
+            label.set_fontproperties(font)
+            label.set_fontsize(cb_fontsize)
+            label.set_color(cb_fontcolor)
+        for line in cb_ax.xaxis.get_ticklines():
+            line.set_alpha(0)
+
+        if output_file is not None:
+            # save the figure
+            fig4.savefig(output_file, format='png', dpi=plot_resolution)
+
+        sys.stdout.write('done\n')
+        sys.stdout.flush()
+
+    
+    
+
+    
+    
+    
+    
+    
+    
+    
+    
+    
+    
+    
+    
+    
+    
+    
+    
+    
+    
+    
+    
+    
+    
+    
+    
+    
+    
 
 
 
