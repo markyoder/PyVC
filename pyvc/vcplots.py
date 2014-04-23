@@ -3471,13 +3471,13 @@ def average_field(sim_file, output_directory, event_ids,
         # -------------------------------------------------------------
         for k in range(len(event_ids)):
             evnum               = event_ids[k]
-            _ev_year            = _event_years[k]
+            ev_year            = _event_years[k]
             #event_sections      = geometry.sections_with_elements(event_element_slips[evnum].keys())
             
             
             #-------------------------------------------------------------------    
             # Apply back slip to all elements, up to time of this event
-            frame_slips  = {bid:-1.0*_ev_year*float(slip_rates[bid]) for bid in slip_rates.keys()}
+            frame_slips  = {bid:-1.0*ev_year*float(slip_rates[bid]) for bid in slip_rates.keys()}
 
             #--------------------------------------------------------------
             # Set up the elements to evaluate Green's functions
@@ -3486,7 +3486,7 @@ def average_field(sim_file, output_directory, event_ids,
             
             #-------------------------------------------------------
             # Grab all events before and including the current event at _ev_year
-            prev_filter         = {'type':'year', 'filter':(0.0,_ev_year)}
+            prev_filter         = {'type':'year', 'filter':(0.0,ev_year)}
             all_events          = events.get_event_data(['event_magnitude', 'event_year', 'event_number'], event_range=prev_filter,section_filter=section_filter)
 
             #-------------------------------------------------------
@@ -3500,7 +3500,7 @@ def average_field(sim_file, output_directory, event_ids,
                     frame_slips[bid] += float(event_element_slips[bid])
         
 
-            sys.stdout.write('event {}, year {}\n'.format(evnum, _ev_year))
+            sys.stdout.write('event {}, year {}\n'.format(evnum, ev_year))
 
         
             #-------------------------------------------------------------------
