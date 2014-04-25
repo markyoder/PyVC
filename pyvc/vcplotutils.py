@@ -1041,12 +1041,13 @@ class VCGravityFieldPlotter(object):
         self.lats_1d = field.lats_1d
         self.dG = field.dG
 
+
     #---------------------------------------------------------------------------
     # Returns a PIL image of the masked displacement map using the current
     # values of the displacements. This map can then be combined into a still
     # or used as part of an animation.
     #---------------------------------------------------------------------------
-    def create_field_image(self, fringes=True):
+    def create_field_image(self, fringes=True, factor=None):
         
         #-----------------------------------------------------------------------
         # Set all of the plotting properties
@@ -1096,8 +1097,12 @@ class VCGravityFieldPlotter(object):
         
         #self.m2.imshow(dG_transformed, cmap=cmap, norm=self.norm)
         # Changed units to microgals (multiply MKS unit by 10^8)
-        self.m2.imshow(dG_transformed*float(pow(10,8)), cmap=cmap, norm=self.norm)
-        
+        #     Can multiply by additional factor
+        if factor is None:
+            self.m2.imshow(dG_transformed*float(pow(10,8)), cmap=cmap, norm=self.norm)
+        else:
+            self.m2.imshow(dG_transformed*float(pow(10,8))*float(factor), cmap=cmap, norm=self.norm)
+
         #-----------------------------------------------------------------------
         # Fig3 is the land/sea mask.
         #-----------------------------------------------------------------------

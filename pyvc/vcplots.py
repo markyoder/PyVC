@@ -3392,7 +3392,8 @@ def event_field_evolution(sim_file, output_directory, sim_time_range,
 #-------------------------------------------------------------------------------
 def average_field(sim_file, output_directory, event_ids,
     field_type='gravity', fringes=True, padding=0.08, cutoff=None,
-    pre=True,buffer=5.0,force_plot=False,section_filter=None):
+    pre=True,buffer=5.0,force_plot=False,section_filter=None,
+    tag=None,backslip_only=False,eq_slip_only=False):
     
     # ----------------------------- Initializing --------------------------
     sys.stdout.write('Initializing animation :: ')
@@ -3404,6 +3405,7 @@ def average_field(sim_file, output_directory, event_ids,
     
     if not output_directory.endswith('/'):
         output_directory += '/'
+
     
     # create the animation subdirs if needed
     field_values_directory = '{}field_values/'.format(output_directory)
@@ -3477,7 +3479,10 @@ def average_field(sim_file, output_directory, event_ids,
             
             #-------------------------------------------------------------------    
             # Apply back slip to all elements, up to time of this event
-            frame_slips  = {bid:-1.0*ev_year*float(slip_rates[bid]) for bid in slip_rates.keys()}
+            if not eq_slip_only:
+                frame_slips  = {bid:-1.0*ev_year*float(slip_rates[bid]) for bid in slip_rates.keys()}
+            else:
+                frame_slips  = {bid:0.0 for bid in slip_rates.keys()}
 
             #--------------------------------------------------------------
             # Set up the elements to evaluate Green's functions
@@ -3486,55 +3491,69 @@ def average_field(sim_file, output_directory, event_ids,
             
             #-------------------------------------------------------
             # Grab all events before and including the current event at _ev_year
-            prev_filter         = {'type':'year', 'filter':(0.0,ev_year)}
-            all_events          = events.get_event_data(['event_magnitude', 'event_year', 'event_number'], event_range=prev_filter,section_filter=section_filter)
+            if not backslip_only:
+                prev_filter         = {'type':'year', 'filter':(0.0,ev_year)}
+                all_events          = events.get_event_data(['event_magnitude', 'event_year', 'event_number'], event_range=prev_filter,section_filter=section_filter)
 
-            #-------------------------------------------------------
-            # Grab the event element slips for all previous events and add to the back slip            
-            for evid in all_events['event_number']:
-                # Grab all event slips up to this event year on specified sections 
-                event_element_slips = events.get_event_element_slips(evid)
+                #-------------------------------------------------------
+                # Grab the event element slips for all previous events and add to the back slip            
+                for evid in all_events['event_number']:
+                    # Grab all event slips up to this event year on specified sections 
+                    event_element_slips = events.get_event_element_slips(evid)
                 
 
-                for bid in event_element_slips.keys():
-                    frame_slips[bid] += float(event_element_slips[bid])
-        
+                    #  Tell John about this step, verify it's ok to leave out these elements
+                    for bid in event_element_slips.keys():
+                        try:
+                            frame_slips[bid] += float(event_element_slips[bid])
+                        except KeyError:
+                            pass        
 
-            sys.stdout.write('event {}, year {}\n'.format(evnum, ev_year))
+
+
+            #sys.stdout.write('event {}, year {}\n'.format(evnum, ev_year))
 
         
             #-------------------------------------------------------------------
-            # Load or calculate all of the data for the current frame.
+            # Load or calculate all of the data for the current frame. 
+            # Unless you want to only visualize backslip or only EQ slips.
             #-------------------------------------------------------------------
 
             # Try and load the fields
             field_values_loaded = EF.load_field_values('{}{}_'.format(field_values_directory, evnum))
-            if field_values_loaded:
-                sys.stdout.write('loaded event {}'.format(evnum))
+            if field_values_loaded and not backslip_only and not eq_slip_only:
+                sys.stdout.write('\nloaded event {}'.format(evnum))
             # If they havent been saved then we need to calculate them
-            elif not field_values_loaded:
-                sys.stdout.write('processing event {}'.format(evnum))
+            else:
+                sys.stdout.write('\nprocessing event {}'.format(evnum))
                 sys.stdout.flush()
             
                 sys.stdout.write(', {} elements :: '.format(len(frame_slips.keys())))
                 sys.stdout.flush()
                 
+                if not backslip_only and not eq_slip_only:
+                    PRE = '{}{}_'.format(field_values_directory, evnum)
+                else:
+                    PRE = None                    
+
                 EF.calculate_field_values(
                     frame_element_data,
                     frame_slips,
                     cutoff=cutoff,
-                    save_file_prefix='{}{}_'.format(field_values_directory, evnum)
-                )
-                
+                    save_file_prefix=PRE)
+
+        EFP.set_field(EF)                
 
         sys.stdout.write('\n')
         
-        # !!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!
-        
+  
+        sys.stdout.write('\nAveraged {} {} fields'.format(len(event_ids),field_type))
+
+
         sys.stdout.write('map image : ')
         sys.stdout.flush()
 
-        map_image = EFP.create_field_image(fringes=fringes)
+        map_image = EFP.create_field_image(fringes=fringes,factor=1.0/float(len(event_ids)))
 
         sys.stdout.write('map overlay : ')
         sys.stdout.flush()
@@ -3717,10 +3736,7 @@ def average_field(sim_file, output_directory, event_ids,
         for sid, sec_trace in fault_traces_latlon.iteritems():
             trace_Xs, trace_Ys = m4(sec_trace[1], sec_trace[0])
             
-            if sid in event_sections:
-                linewidth = fault_width + 3
-            else:
-                linewidth = fault_width
+            linewidth = fault_width
 
             m4.plot(trace_Xs, trace_Ys, color=fault_color, linewidth=linewidth, solid_capstyle='round', solid_joinstyle='round')
 
@@ -3758,9 +3774,14 @@ def average_field(sim_file, output_directory, event_ids,
         for line in cb_ax.xaxis.get_ticklines():
             line.set_alpha(0)
 
-        if output_file is not None:
-            # save the figure
-            fig4.savefig(output_file, format='png', dpi=plot_resolution)
+        if tag is None:        
+            output_file = output_directory+'avg_preseismic_{}yr_{}_events_cbar{}.png'.format(int(buffer),len(event_ids),EFP.dmc['cbar_max'])
+        else:
+            output_file = output_directory+'avg_preseismic_{}yr_{}_events_cbar{}_{}.png'.format(int(buffer),len(event_ids),EFP.dmc['cbar_max'],tag)
+
+
+
+        fig4.savefig(output_file, format='png', dpi=plot_resolution)
 
         sys.stdout.write('done\n')
         sys.stdout.flush()
