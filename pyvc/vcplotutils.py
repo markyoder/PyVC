@@ -988,8 +988,8 @@ class VCGravityFieldPlotter(object):
             'cb_height':            20.0,
             'cb_margin_t':          10.0,
          #min/max gravity change labels for colorbar (in microgals)
-            'cbar_min':             -1000,
-            'cbar_max':             1000
+            'cbar_min':             -300,
+            'cbar_max':             300
         }
         
         #-----------------------------------------------------------------------
@@ -1047,7 +1047,7 @@ class VCGravityFieldPlotter(object):
     # values of the displacements. This map can then be combined into a still
     # or used as part of an animation.
     #---------------------------------------------------------------------------
-    def create_field_image(self, fringes=True, factor=None):
+    def create_field_image(self, fringes=True):
         
         #-----------------------------------------------------------------------
         # Set all of the plotting properties
@@ -1097,11 +1097,7 @@ class VCGravityFieldPlotter(object):
         
         #self.m2.imshow(dG_transformed, cmap=cmap, norm=self.norm)
         # Changed units to microgals (multiply MKS unit by 10^8)
-        #     Can multiply by additional factor
-        if factor is None:
-            self.m2.imshow(dG_transformed*float(pow(10,8)), cmap=cmap, norm=self.norm)
-        else:
-            self.m2.imshow(dG_transformed*float(pow(10,8))*float(factor), cmap=cmap, norm=self.norm)
+        self.m2.imshow(dG_transformed*float(pow(10,8)), cmap=cmap, norm=self.norm)
 
         #-----------------------------------------------------------------------
         # Fig3 is the land/sea mask.

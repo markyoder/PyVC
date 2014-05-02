@@ -617,8 +617,6 @@ class VCGravityField(VCField):
         # saved. This is done seperately from above because self.dG is a
         # cumulative result that could include contributions from multiple
         # events. We only want to save the results of a single calculation.
-        # UNLESS we want to save the cumulative field, use the save_cumulative
-        # value.
         #-----------------------------------------------------------------------
         if save_file_prefix is not None:
             dG = None
@@ -634,7 +632,7 @@ class VCGravityField(VCField):
         self.dG = np.empty((self.lats_1d.size, self.lons_1d.size))
         self.dG.fill(value)
 
-    def load_field_values(self, file_prefix):
+    def load_field_values(self, file_prefix, factor=1.0, subtract=False):
         if self.dG is None:
             self.init_field(0.0)
         
@@ -647,10 +645,16 @@ class VCGravityField(VCField):
                 self.dG_min = min
             '''
             
-            self.dG += dG
+            if not subtract:
+                self.dG += factor*dG
+            else:
+                self.dG -= factor*dG
             return True
         except IOError:
             return False
+            
+    def save_field_values(self,file_prefix):
+        np.save('{}dG.npy'.format(save_file_prefix), self.dG)
     
     def shrink_field(self, percentage):
         self.dG *= percentage
