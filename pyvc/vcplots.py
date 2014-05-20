@@ -1366,10 +1366,34 @@ def event_field_animation(sim_file, output_directory, event_range,
 #-------------------------------------------------------------------------------
 # plots event fields
 #-------------------------------------------------------------------------------
-def plot_event_field(sim_file, evnum, output_file=None, field_type='displacement', fringes=True, padding=0.08, cutoff=None, save_file_prefix=None):
+def plot_event_field(sim_file, evnum, output_directory, field_type='displacement', fringes=True, padding=0.08, cutoff=None, tag=None, hi_res=False):
     
     sys.stdout.write('Initializing plot :: ')
     sys.stdout.flush()
+    
+    field_values_directory = '{}field_values/'.format(output_directory)
+    
+    if not os.path.exists(output_directory):
+        os.makedirs(output_directory)
+        
+    if not output_directory.endswith('/'):
+        output_directory += '/'
+        
+    if not os.path.exists(field_values_directory):
+        os.makedirs(field_values_directory)
+        
+    PRE = '{}{}_'.format(field_values_directory, evnum)
+            
+    if field_type=='gravity':        
+        output_file = output_directory+'{}_dg'.format(evnum)
+    elif field_type=='displacement':
+        output_file = output_directory+'{}_displ'.format(evnum)
+        
+    if tag is not None:
+        output_file += '_'+tag
+        
+    output_file += '.png'
+        
     
     start_time = time.time()
     with VCSimData() as sim_data:
@@ -1411,7 +1435,7 @@ def plot_event_field(sim_file, evnum, output_file=None, field_type='displacement
     sys.stdout.write('done\n')
     sys.stdout.flush()
 
-    field_values_loaded = EF.load_field_values(save_file_prefix)
+    field_values_loaded = EF.load_field_values(PRE)
  
     if field_values_loaded:
         sys.stdout.write('Loading event {} {} field :: '.format(evnum, field_type))
@@ -1426,21 +1450,21 @@ def plot_event_field(sim_file, evnum, output_file=None, field_type='displacement
                     event_element_data,
                     event_element_slips,
                     cutoff=cutoff,
-                    save_file_prefix=save_file_prefix)
-                
+                    save_file_prefix=PRE)
 
-    '''
-    if field_type == 'displacement':
-        np.save('local/dX.npy', EF.dX)
-        np.save('local/dY.npy', EF.dY)
-        np.save('local/dZ.npy', EF.dZ)
-        #EF.dX = np.load('local/dX.npy')
-        #EF.dY = np.load('local/dY.npy')
-        #EF.dZ = np.load('local/dZ.npy')
-    elif field_type == 'gravity':
-        np.save('local/dG.npy', EF.dG)
-        #EF.dG = np.load('local/dG.npy')
-    '''
+
+    
+    #if field_type == 'displacement':
+    #    np.save('local/dX.npy', EF.dX)
+    #    np.save('local/dY.npy', EF.dY)
+    #    np.save('local/dZ.npy', EF.dZ)
+    #    #EF.dX = np.load('local/dX.npy')
+    #    #EF.dY = np.load('local/dY.npy')
+    #    #EF.dZ = np.load('local/dZ.npy')
+    #elif field_type == 'gravity':
+    #    np.save('local/dG.npy', EF.dG)
+    #    #EF.dG = np.load('local/dG.npy')
+    
     sys.stdout.write('done\n')
     sys.stdout.flush()
 
@@ -1451,6 +1475,10 @@ def plot_event_field(sim_file, evnum, output_file=None, field_type='displacement
         EFP = vcplotutils.VCDisplacementFieldPlotter(EF.min_lat, EF.max_lat, EF.min_lon, EF.max_lon)
     elif field_type == 'gravity':
         EFP = vcplotutils.VCGravityFieldPlotter(EF.min_lat, EF.max_lat, EF.min_lon, EF.max_lon)
+
+    generate_map(EF,EFP,fault_traces,fringes,event_data,output_file,field_type='gravity',hi_res=hi_res)
+
+    """
     EFP.set_field(EF)
 
     if field_type == 'displacement':
@@ -1690,6 +1718,7 @@ def plot_event_field(sim_file, evnum, output_file=None, field_type='displacement
 
     sys.stdout.write('done\n')
     sys.stdout.flush()
+    """
 
 #-------------------------------------------------------------------------------
 # plots recurrence intervals
@@ -3637,6 +3666,98 @@ def plot_backslip(sim_file, duration, section_filter=None, field_type='gravity',
     generate_map(EF,EFP,fault_traces,fringes,event_data,output_file,field_type='gravity')
 
 
+#--------------------------------------------------------------------------
+def make_composite_field(sim_file, event_ids,field_dir,
+    field_type='gravity', fringes=True, padding=0.08, cutoff=None,
+    pre=True,buffer=5.0,section_filter=None,
+    backslip_only=False,eq_slip_only=False,tag=None):
+
+    out_dir = 'composite_fields/'
+    FACTOR  = float(1.0/len(event_ids))
+
+
+    if not field_dir.endswith('/'):
+        field_dir += '/'    
+              
+
+    prefix0  = out_dir+'avg_'
+    if pre:
+        prefix1 = 'pre_'
+    else:
+        prefix1 = 'post_'
+    prefix1 += str(int(buffer[0]))+'yr_'
+    
+    if backslip_only:
+        prefix1 += 'back_'
+    if eq_slip_only:
+        prefix1 += 'eq_'
+
+       
+    if tag is not None:
+        prefix1 += tag+'_'   
+       
+    if not os.path.exists(out_dir):
+        os.makedirs(out_dir)
+        
+    #---------------------------------------------------------------------------
+    # Open the data file. It needs to stay open while we do the animation.
+    #---------------------------------------------------------------------------
+    with VCSimData() as sim_data:
+        # open the simulation data file
+        sim_data.open_file(sim_file)
+        
+        # instantiate the vc classes passing in an instance of the VCSimData
+        # class
+        geometry    = VCGeometry(sim_data)
+        events      = VCEvents(sim_data)
+        
+        # Get event information, filter by section if specified
+        event_data = events.get_event_data(['event_magnitude', 'event_year', 'event_number'], section_filter=section_filter)
+        
+        # Get global information about the simulations geometry
+        min_lat     = geometry.min_lat
+        max_lat     = geometry.max_lat
+        min_lon     = geometry.min_lon
+        max_lon     = geometry.max_lon
+        base_lat    = geometry.base_lat
+        base_lon    = geometry.base_lon
+        fault_traces= geometry.get_fault_traces()
+   
+
+    # -------------------------------------------------------------
+    # Instantiate the field and the plotter
+    # -------------------------------------------------------------
+    if field_type == 'displacement':
+        EF = vcutils.VCDisplacementField(min_lat, max_lat, min_lon, max_lon, base_lat, base_lon, padding=padding)
+        EFP = vcplotutils.VCDisplacementFieldPlotter(EF.min_lat, EF.max_lat, EF.min_lon, EF.max_lon)
+        EFP.calculate_look_angles(geometry[:])
+    elif field_type == 'gravity':
+        EF = vcutils.VCGravityField(min_lat, max_lat, min_lon, max_lon, base_lat, base_lon, padding=padding)
+        EFP = vcplotutils.VCGravityFieldPlotter(EF.min_lat, EF.max_lat, EF.min_lon, EF.max_lon)
+
+
+    output_file = prefix0+prefix1+'cbar{}.png'.format(EFP.dmc['cbar_max'])
+
+    # -------------------------------------------------------------
+    # Add up all the field values that comprise field #1
+    # -------------------------------------------------------------
+    for evnum in event_ids:
+        PRE = field_dir+'field_values/{}_'.format(evnum)
+        field_values_loaded = EF.load_field_values(PRE,factor=FACTOR)
+        if not field_values_loaded:
+            print "Cannot load field values!"
+        else:
+            sys.stdout.write('\nloaded event {}'.format(evnum))
+    sys.stdout.write('\nComposite fields loaded\n')
+
+
+  
+    #------------------------------------
+    sys.stdout.write('\nComposite fields complete')
+    # Make the plot and save it
+    generate_map(EF,EFP,fault_traces,fringes,event_data,output_file,field_type='gravity')
+
+
 
 #--------------------------------------------------------------------------
 def diff_composite_fields(sim_file, event_ids,field1dir,field2dir,
@@ -3755,7 +3876,7 @@ def diff_composite_fields(sim_file, event_ids,field1dir,field2dir,
     
     
 #---------------------------------------------------------------------------
-def generate_map(EF,EFP,fault_traces,fringes,event_data,output_file,field_type='gravity'):
+def generate_map(EF,EFP,fault_traces,fringes,event_data,output_file,field_type='gravity',hi_res=False):
 
     # Send field values to be plotted
     EFP.set_field(EF)                
@@ -3845,7 +3966,12 @@ def generate_map(EF,EFP,fault_traces,fringes,event_data,output_file,field_type='
     pwi = pw/plot_resolution
     phi = ph/plot_resolution
 
-    fig4 = mplt.figure(figsize=(pwi, phi), dpi=plot_resolution)
+    if hi_res:
+        fig_res = plot_resolution*4.0
+    else:
+        fig_res = plot_resolution
+
+    fig4 = mplt.figure(figsize=(pwi, phi), dpi=fig_res)
 
     #---------------------------------------------------------------------------
     # m4, fig4 is all of the boundary data.
@@ -3985,7 +4111,7 @@ def generate_map(EF,EFP,fault_traces,fringes,event_data,output_file,field_type='
         line.set_alpha(0)
 
 
-    fig4.savefig(output_file, format='png', dpi=plot_resolution)
+    fig4.savefig(output_file, format='png', dpi=fig_res)
 
     sys.stdout.write('\nPlot saved: {}'.format(output_file))
     sys.stdout.write('\ndone\n')

@@ -184,11 +184,20 @@ class VCEvents(VCSys):
             
             # get all of the eligible event ids from the simulation data
             eligible_evnums_tmp = []
-            for secid in section_filter['filter']:
+            
+            # Added this exception in the case of single section filtering  
+            if len(section_filter['filter'])==1:
                 try:
+                    secid = section_filter['filter'][0]
                     eligible_evnums_tmp.append(self.sim_data.file.root.events_by_section._v_children['section_{}'.format(secid)].read())
                 except KeyError:
                     raise vcexceptions.BadSectionID(secid)
+            else:
+                for secid in section_filter['filter']:
+                    try:
+                        eligible_evnums_tmp.append(self.sim_data.file.root.events_by_section._v_children['section_{}'.format(secid)].read())
+                    except KeyError:
+                        raise vcexceptions.BadSectionID(secid)
 
             self.get_event_data_from_evnums(
                 list(set(list(itertools.chain.from_iterable(eligible_evnums_tmp)))),

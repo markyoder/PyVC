@@ -653,6 +653,24 @@ class VCGravityField(VCField):
         except IOError:
             return False
             
+            
+            
+    def get_field_value(self,lat,lon):
+        # returns gravity field value (in microgals)
+        #              at nearest lat/lon grid point 
+        delta_lat = self.lats_1d[7] - self.lats_1d[6]
+        delta_lon = self.lons_1d[7] - self.lons_1d[6]
+    
+        i_lat = np.where(np.logical_and(lat-delta_lat*0.5<self.lats_1d,self.lats_1d<lat+delta_lat*0.5))[0][0]
+        i_lon = np.where(np.logical_and(lon-delta_lon*0.5<self.lons_1d,self.lons_1d<lon+delta_lon*0.5))[0][0]
+    
+        #print "\nlat_in: {}, matched: {}".format(lat,self.lats_1d[i_lat])
+        #print "\nlon_in: {}, matched: {}".format(lon,self.lons_1d[i_lon])
+    
+        return self.dG[i_lat][i_lon]*pow(10,8)
+        
+        
+            
     def save_field_values(self,file_prefix):
         np.save('{}dG.npy'.format(save_file_prefix), self.dG)
     

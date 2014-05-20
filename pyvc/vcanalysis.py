@@ -89,6 +89,59 @@ def sim_info(sim_file, sortby='event_magnitude', show=50, event_range=None, sect
         for i in sorted_data:
             print '{ev_num:<10}{ev_year:<10.2f}{ev_mag:<10.2f}'.format(ev_num=event_data['event_number'][i], ev_year=event_data['event_year'][i], ev_mag=event_data['event_magnitude'][i])
 
+#-------------------------------------------------------------------------------
+def detailed_sim_info(sim_file, sortby='event_magnitude', show=15, event_range=None, section_filter=None, magnitude_filter=None,return_evnums=False):
+
+     with VCSimData() as sim_data:
+        evnums = []     
+     
+        # open the simulation data file
+        sim_data.open_file(sim_file)
+
+        # instantiate the vc classes passing in an instance of the VCSimData
+        # class
+        events = VCEvents(sim_data)
+        geometry = VCGeometry(sim_data)
+
+        event_data = events.get_event_data(['event_number', 'event_year', 'event_magnitude', 'event_range_duration','event_average_slip','event_surface_rupture_length'], event_range=event_range, magnitude_filter=magnitude_filter, section_filter=section_filter)
+        
+        print '{0:<10}{1:<10}{2:<10}{3:<10}{4:<10}'.format('num','year','magnitude','slip [m]','rupt.len [km]')
+        if sortby == 'event_elements':
+            sorted_data = [i[0] for i in sorted(enumerate(event_data[sortby]), lambda a,b: cmp(len(b[1]),len(a[1])), reverse=True)][0:show]
+        else:
+            sorted_data = [i[0] for i in sorted(enumerate(event_data[sortby]), key=itemgetter(1), reverse=True)][0:show]
+     
+        for i in sorted_data:
+            print '{ev_num:<10}{ev_year:<10.2f}{ev_mag:<10.2f}{ev_av_slip:<10.2f}{ev_rup_len:<10.2f}'.format(ev_num=event_data['event_number'][i], ev_year=event_data['event_year'][i], ev_mag=event_data['event_magnitude'][i],ev_av_slip=event_data['event_average_slip'][i],ev_rup_len=event_data['event_surface_rupture_length'][i]/1000.0)
+            if return_evnums:
+                evnums.append(event_data['event_number'][i])
+
+     if return_evnums:
+        return evnums
+
+
+
+def event_sections(sim_file,evnum):
+    with VCSimData() as sim_data:
+        # open the simulation data file
+        sim_data.open_file(sim_file)
+
+        # instantiate the vc classes passing in an instance of the VCSimData
+        # class
+        events = VCEvents(sim_data)
+        geometry = VCGeometry(sim_data)
+
+        elements = events.get_event_elements(evnum)
+        sections = geometry.sections_with_elements(elements)
+        
+        print 'event {}'.format(evnum)    
+        for secid in sections:
+            print '{sec:<10}{name:<10}'.format(sec=secid,name=geometry.get_section_name(secid))
+    
+
+
+
+
 def graph_events(sim_file, output_file, triggers_only=False, event_range=None, section_filter=None, magnitude_filter=None):
     
     sys.stdout.write('Initializing graph :: ')
