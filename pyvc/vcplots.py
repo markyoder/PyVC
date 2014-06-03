@@ -1,14 +1,12 @@
 #!/usr/bin/env python
+import matplotlib.pyplot as mplt
+mplt.switch_backend('agg')
+
 from pyvc import *
 from pyvc import vcutils
 from pyvc import vcplotutils
 from pyvc import vcexceptions
 from pyvc import vcanalysis
-
-
-import matplotlib.pyplot as mplt
-mplt.switch_backend('agg')
-
 
 import matplotlib.font_manager as mfont
 import matplotlib.colors as mcolor
@@ -18,7 +16,6 @@ import matplotlib.patches as mpatches
 from mpl_toolkits.basemap import Basemap
 
 import numpy as np
-
 import math
 import cPickle
 import time
@@ -28,18 +25,12 @@ import sys
 import gc
 import itertools
 import subprocess
-
 import networkx as nx
 from networkx.algorithms import bipartite
 
 import quakelib
 
-'''
-import multiprocessing
-import Queue
-from PIL import Image
-from mpl_toolkits.basemap import Basemap, maskoceans, interp
-'''
+
 
 def plot_forecast(sim_file, event_graph_file=None, event_sequence_graph_file=None, output_file=None, event_range=None, section_filter=None, magnitude_filter=None, padding=0.08, fixed_dt=30.0):
     #---------------------------------------------------------------------------
@@ -131,12 +122,6 @@ def plot_forecast(sim_file, event_graph_file=None, event_sequence_graph_file=Non
         
         event_data = events.get_event_data(['event_number', 'event_year', 'event_magnitude', 'event_range_duration'], event_range=event_range, magnitude_filter=magnitude_filter, section_filter=section_filter)
     
-    # This is a temp hack to solve the problem with bad fault offsets in the
-    # older sims.
-    with VCSimData() as sim_data:
-        # open the simulation data file
-        sim_data.open_file('ids/Sim-2.h5')
-        
         geometry = VCGeometry(sim_data)
         
         min_lat = geometry.min_lat
@@ -154,6 +139,9 @@ def plot_forecast(sim_file, event_graph_file=None, event_sequence_graph_file=Non
                     for n,x in enumerate(event_data['event_year'])
                     if n != 0
                 ])
+    
+            
+
     
     # Calculate the lat-lon range based on the min-max and the padding
     lon_range = max_lon - min_lon
@@ -430,8 +418,9 @@ def plot_forecast(sim_file, event_graph_file=None, event_sequence_graph_file=Non
     t0s_to_plot = [k for k in conditional.keys() if k <= 150]
     
     for t0 in sorted(t0s_to_plot):
-        color = sp_line_colormap(float(t0)/float(max(t0s_to_plot)))
-        cond_ax.plot(conditional[t0]['x'], conditional[t0]['y'], color=color, linewidth=sp_line_width, label='{}'.format(t0))
+        if conditional[t0] is not None:
+            color = sp_line_colormap(float(t0)/float(max(t0s_to_plot)))
+            cond_ax.plot(conditional[t0]['x'], conditional[t0]['y'], color=color, linewidth=sp_line_width, label='{}'.format(t0))
 
     # set the fonts for the tick labels
     for label in cond_ax.xaxis.get_ticklabels()+cond_ax.yaxis.get_ticklabels():
@@ -637,6 +626,658 @@ def plot_forecast(sim_file, event_graph_file=None, event_sequence_graph_file=Non
         else:
             fig.savefig(output_file, format=plot_format, dpi=res)
         #fig.savefig(output_file, format='png', dpi=res)
+
+
+#-------------------------------------------------------------------------------
+# New method, to save each individual subplot from plot_forecast
+#-------------------------------------------------------------------------------
+def forecast_plots(sim_file, event_graph_file=None, event_sequence_graph_file=None, event_range=None, section_filter=None, magnitude_filter=None, padding=0.08, fixed_dt=30.0, fname_tag=None):
+    #---------------------------------------------------------------------------
+    # Plot parameters.
+    #---------------------------------------------------------------------------
+    imw = 816.0 # The full image width.
+    # Image height is set based on the sub plots.
+    sph = 200.0 # The sub-plot height
+    # Sub-plot width is based on the specific sub-plot.
+    lm = 50.0
+    rm = 15.0
+    tm = 40.0
+    bm = 20.0
+    sphs = 40.0 # The sub-plot horizontal spacing.
+    spvs = 40.0 # The sub-plot vertical spacing.
+    
+    mmw = 790.0
+    
+    res = 72.0
+    map_res = 'i'
+    map_proj = 'cyl'
+    
+    titlefont1 = mfont.FontProperties(family='Arial', style='normal', variant='normal', size=12)
+    titlefont2 = mfont.FontProperties(family='Arial', style='normal', variant='normal', size=14, weight='bold')
+    sectionkeyfont = mfont.FontProperties(family='Arial', style='normal', variant='normal', size=10)
+    ticklabelfont = mfont.FontProperties(family='Arial', style='normal', variant='normal', size=17)
+    framelabelfont = mfont.FontProperties(family='Arial', style='normal', variant='normal', size=17)
+    legendfont = mfont.FontProperties(family='Arial', style='normal', variant='normal', size=19)
+    smtitlefont = mfont.FontProperties(family='Arial', style='normal', variant='normal', size=15, weight='bold')
+    cbticklabelfont = mfont.FontProperties(family='Arial', style='normal', variant='normal', size=15)
+    
+    matrix_cmap = mplt.get_cmap('hot_r')
+    sequence_cmap = mplt.get_cmap('autumn')
+    
+    water_color             = '#bed5ff'
+    land_color              = '#ffffff'
+    seq_land_color          = '#ffffff'
+    boundary_color          = '#000000',
+    coastline_color         = '#9a9a9a'
+    country_color           = '#9a9a9a'
+    state_color             = '#9a9a9a'
+    fault_color             = '#000000'
+    alt_fault_color         = '#737373'
+    selected_fault_color    = '#FFFFFF'
+    map_tick_color          = '#000000'
+    map_frame_color         = '#000000'
+    grid_color              = '#000000'
+    cb_fontcolor            = '#000000'
+
+    boundary_width          = 1.0
+    coastline_width         = 1.0
+    country_width           = 1.0
+    state_width             = 1.0
+    fault_width             = 0.5
+    forecast_fault_width    = 6.0
+    seq_fault_width_max     = 6.0
+    seq_fault_width_min     = 3.0
+    map_frame_width         = 1.0
+    grid_width              = 0.5
+    num_grid_lines          = 5
+    
+    sp_line_color           = '#000000'
+    sp_line_colormap        = sequence_cmap
+    sp_line_width           = 2.0
+    
+    t0_dt_main_line_color   = '#000000'
+    t0_dt_sub_line_color    = '#737373'
+    t0_dt_main_line_width   = 2.0
+    t0_dt_sub_line_width    = 1.0
+    t0_dt_range_color       = sequence_cmap(0.99)
+    
+    prob_cbh                = 20.0
+    prob_cbs                = 40.0
+    
+    forcast_title_line_spacing = 20.0
+    
+    legend_loc='best'
+
+    #---------------------------------------------------------------------------
+    # Get the data.
+    #---------------------------------------------------------------------------
+    with VCSimData() as sim_data:
+        # open the simulation data file
+        sim_data.open_file(sim_file)
+
+        # instantiate the vc classes passing in an instance of the VCSimData
+        # class
+        events = VCEvents(sim_data)
+        
+        event_data = events.get_event_data(['event_number', 'event_year', 'event_magnitude', 'event_range_duration'], event_range=event_range, magnitude_filter=magnitude_filter, section_filter=section_filter)
+    
+        geometry = VCGeometry(sim_data)
+        
+        min_lat = geometry.min_lat
+        max_lat = geometry.max_lat
+        min_lon = geometry.min_lon
+        max_lon = geometry.max_lon
+        base_lat = geometry.base_lat
+        base_lon = geometry.base_lon
+
+        fault_traces = geometry.get_fault_traces()
+
+        section_names = {sid:geometry.get_section_name(sid) for sid in fault_traces.iterkeys()}    
+
+
+
+    intervals = np.array([   x - event_data['event_year'][n-1]
+                    for n,x in enumerate(event_data['event_year'])
+                    if n != 0
+                ])
+    
+    
+    # Calculate the lat-lon range based on the min-max and the padding
+    lon_range = max_lon - min_lon
+    lat_range = max_lat - min_lat
+    max_range = max((lon_range, lat_range))
+    min_lon = min_lon - lon_range*padding
+    min_lat = min_lat - lat_range*padding
+    max_lon = max_lon + lon_range*padding
+    max_lat = max_lat + lat_range*padding
+
+    
+    
+    # A conversion instance for doing the lat-lon to x-y conversions
+    convert = quakelib.Conversion(base_lat, base_lon)
+    
+    # Convert the fault traces to lat-lon
+    fault_traces_latlon = {}
+    for secid in fault_traces.iterkeys():
+         fault_traces_latlon[secid] = zip(*[(lambda y: (y.lat(),y.lon()))(convert.convert2LatLon(quakelib.Vec3(x[0], x[1], x[2]))) for x in fault_traces[secid]])
+    
+    ''''''
+    #---------------------------------------------------------------------------
+    # t vs. P(t).
+    #---------------------------------------------------------------------------
+    cumulative = {}
+    
+    cumulative['x'] = np.sort(intervals)
+    cumulative['y'] = np.arange(float(intervals.size))/float(intervals.size)
+    #cumulative['y'] = [float(n)/float(len(intervals)) for n,x in enumerate(cumulative['x'])]
+    #mplt.plot(np.sort(intervals), [float(n)/float(len(intervals)) for n,x in enumerate(np.sort(intervals))])
+    
+    #---------------------------------------------------------------------------
+    # t0 vs. P(t0 + dt, t0) for fixed dt.
+    #---------------------------------------------------------------------------
+    
+    conditional_dt_fixed = {'x':[],'y':[]}
+    
+    for t0 in np.sort(intervals):
+        int_t0_dt = intervals[np.where( intervals > t0+fixed_dt)]
+        int_t0 = intervals[np.where( intervals > t0)]
+        
+        if int_t0.size != 0:
+            conditional_dt_fixed['x'].append(t0)
+            conditional_dt_fixed['y'].append(1.0 - float(int_t0_dt.size)/float(int_t0.size))
+
+    #---------------------------------------------------------------------------
+    # t = t0 + dt vs. P(t, t0) for various t0.
+    #---------------------------------------------------------------------------
+    conditional = {}
+
+    for t0 in range(0,275,25):
+        int_t0 = intervals[np.where( intervals > t0)]
+        if int_t0.size != 0:
+            conditional[t0] = {'x':[],'y':[]}
+            for dt in range(250):
+                int_t0_dt = intervals[np.where( intervals > t0+dt)]
+                conditional[t0]['x'].append(t0+dt)
+                conditional[t0]['y'].append(1.0 - float(int_t0_dt.size)/float(int_t0.size))
+        else:
+            conditional[t0] = None
+
+    #---------------------------------------------------------------------------
+    # t0 vs dt.
+    #---------------------------------------------------------------------------
+    t0_dt = {}
+
+    for percent in [0.25, 0.5, 0.75]:
+        t0_dt[int(percent*100)] = {'x':[],'y':[]}
+        for t0 in sorted(conditional.keys()):
+            if conditional[t0] is not None:
+                index = (np.abs(np.array(conditional[t0]['y'])-percent)).argmin()
+                
+                t0_dt[int(percent*100)]['x'].append(t0)
+                t0_dt[int(percent*100)]['y'].append(conditional[t0]['x'][index]-t0)
+        
+    #---------------------------------------------------------------------------
+    # Section probability matrix
+    #---------------------------------------------------------------------------
+    if event_graph_file is None:
+        # Calculate the graph
+        event_graph_file = 'event_graph.pkl'
+        vcanalysis.graph_events(sim_file, event_graph_file, event_range=event_range, magnitude_filter=magnitude_filter)
+
+    G = cPickle.load(open(event_graph_file, 'rb'))
+
+    all_sections = [int(x) for x in sorted(fault_traces.keys())]
+
+    matrix_prob = nx.attr_matrix(G, edge_attr='weight', normalized=False, rc_order=all_sections)
+    
+    if section_filter is not None:
+        filtered_sections_pos = [np.where(np.array(all_sections) == sid)[0][0] for sid in sorted(section_filter['filter'])]
+    
+    #---------------------------------------------------------------------------
+    # Sequences that end in the selected sections
+    #---------------------------------------------------------------------------
+    if event_sequence_graph_file is None:
+        # Calculate the graph
+        event_sequence_graph_file = 'event_sequence_graph.pkl'
+        vcanalysis.graph_event_sequences(sim_file, event_sequence_graph_file, event_range=event_range, magnitude_filter=magnitude_filter)
+
+    G = cPickle.load(open(event_sequence_graph_file, 'rb'))
+
+    if section_filter is not None:
+        sequences = {}
+        for sid in sorted(section_filter['filter']):
+            for sequence in G.to_undirected().neighbors_iter(sid):
+                try:
+                    sequences[sequence] += 1
+                except KeyError:
+                    sequences[sequence] = 1
+    
+    #---------------------------------------------------------------------------
+    # Set up the plot.
+    #---------------------------------------------------------------------------
+    # The main map basemap instance
+    mm = Basemap(
+        llcrnrlon=min_lon,
+        llcrnrlat=min_lat,
+        urcrnrlon=max_lon,
+        urcrnrlat=max_lat,
+        lat_0=(max_lat+min_lat)/2.0,
+        lon_0=(max_lon+min_lon)/2.0,
+        resolution=map_res,
+        projection=map_proj,
+        suppress_ticks=True
+    )
+    
+    #aspect = 0.974736393014
+    aspect = mm.aspect
+    
+    # The main map height and width
+    #mmw = imw - lm - rm - ftw - sphs
+    mmh = math.ceil(mmw*aspect)
+    
+    # The sub map height and width
+    smw = math.ceil((imw - lm - rm - 2.0*sphs)/3.0)
+    smh = math.ceil(smw*aspect)
+    
+    # The total image height
+    imh = tm + bm + mmh + 3.0*sph + 2.0*smh + 5.0*spvs
+
+    #---------------------------------------------------------------------------
+    # Create the figure instance for big map
+    #---------------------------------------------------------------------------
+    imwi = mmw/res
+    imhi = mmh/res
+    fig = mplt.figure(figsize=(imwi, imhi), dpi=res)
+    
+    #---------------------------------------------------------------------------
+    # Plot the main map.
+    #---------------------------------------------------------------------------
+    #mm.ax = fig.add_axes((lm/imw, (bm + 3.0*sph + 2.0*smh + 5.0*spvs)/imh, mmw/imw, mmh/imh))
+    mm.ax = fig.add_axes()
+
+    # Draw a frame around the map.
+    mm.drawmapboundary(color=map_frame_color, linewidth=map_frame_width, fill_color=water_color)
+    
+    # Fill the continents and lakes.
+    mm.fillcontinents(color=land_color, lake_color=water_color)
+    
+    # draw coastlines, edge of map.
+    mm.drawcoastlines(color=coastline_color, linewidth=coastline_width)
+
+    # draw countries
+    mm.drawcountries(linewidth=country_width, color=country_color)
+
+    # draw states
+    mm.drawstates(linewidth=state_width, color=state_color)
+
+    # draw parallels.
+    parallels = np.linspace(min_lat, max_lat, num_grid_lines+1)
+    mm_parallels = mm.drawparallels(
+        parallels,
+        labels=[1,0,0,0],
+        color=grid_color,
+        fontproperties=ticklabelfont,
+        fmt='%.2f',
+        linewidth=grid_width,
+        dashes=[1, 10]
+    )
+
+    # draw meridians
+    meridians = np.linspace(min_lon, max_lon, num_grid_lines+1)
+    mm_meridians = mm.drawmeridians(
+        meridians,
+        labels=[0,0,1,0],
+        color=grid_color,
+        fontproperties=ticklabelfont,
+        fmt='%.2f',
+        linewidth=grid_width,
+        dashes=[1, 10]
+    )
+    
+    # print faults on lon-lat plot
+    for sid, sec_trace in fault_traces_latlon.iteritems():
+        trace_Xs, trace_Ys = mm(sec_trace[1], sec_trace[0])
+        
+        if section_filter is not None and sid in section_filter['filter']:
+            linewidth = forecast_fault_width
+        else:
+            linewidth = fault_width
+
+        mm.plot(trace_Xs, trace_Ys, color=fault_color, linewidth=linewidth, solid_capstyle='round', solid_joinstyle='round')
+    
+    fname1 = 'forecast_sections.png'
+    
+    if fname_tag is not None:
+        outfile1 = 'local/'+fname_tag+'_'+fname1
+    else:
+        outfile1 = 'local/'+fname1
+                
+    mplt.savefig(outfile1, dpi=res)
+        
+    
+    ''''''
+    #---------------------------------------------------------------------------
+    # Plot t vs. P(t).
+    #---------------------------------------------------------------------------
+
+    # Same plot size for each probability plot
+    prob_width  = 900
+    prob_height = 600
+
+    imwi = prob_width/res
+    imhi = prob_height/res
+    
+    fig2    = mplt.figure(figsize=(imwi, imhi), dpi=res)
+    cum_ax  = fig2.add_subplot(111)
+    
+    #cum_spw = math.ceil((imw - lm - rm - sphs)/2.0)
+    #cum_ax = fig.add_axes((lm/imw, (bm + 2.0*sph + 2.0*smh + 4.0*spvs)/imh, cum_spw/imw, sph/imh))
+
+    cum_ax.plot(cumulative['x'], cumulative['y'], color=sp_line_color, linewidth=sp_line_width)
+    
+    # set the fonts for the tick labels
+    for label in cum_ax.xaxis.get_ticklabels()+cum_ax.yaxis.get_ticklabels():
+        label.set_fontproperties(ticklabelfont)
+    
+    cum_ax.set_ylim((0.0, 1.0))
+    
+    cum_ax.set_ylabel('P(t)', fontproperties=framelabelfont)
+    cum_ax.set_xlabel('t [years]', fontproperties=framelabelfont)
+    
+    fname2 = 'prob_vs_time.png'
+    
+    if fname_tag is not None:
+        outfile2 = 'local/'+fname_tag+'_'+fname2
+    else:
+        outfile2 = 'local/'+fname2
+                
+    mplt.savefig(outfile2, dpi=res)
+
+    #---------------------------------------------------------------------------
+    # Plot t0 vs. P(t0 + dt, t0) for fixed dt.
+    #---------------------------------------------------------------------------
+    fig3 = mplt.figure(figsize=(imwi, imhi), dpi=res)
+    
+    #cond_dt_fixed_spw = math.ceil((imw - lm - rm - sphs)/2.0)
+    #cond_dt_fixed_ax = fig.add_axes(((lm + cum_spw + sphs)/imw, (bm + 2.0*sph + 2.0*smh + 4.0*spvs)/imh, cum_spw/imw, sph/imh))
+    cond_dt_fixed_ax = fig3.add_subplot(111)
+
+    cond_dt_fixed_ax.plot(conditional_dt_fixed['x'], conditional_dt_fixed['y'], color=sp_line_color, linewidth=sp_line_width)
+    
+    # set the fonts for the tick labels
+    for label in cond_dt_fixed_ax.xaxis.get_ticklabels()+cond_dt_fixed_ax.yaxis.get_ticklabels():
+        label.set_fontproperties(ticklabelfont)
+
+    cond_dt_fixed_ax.set_ylim((0.0, 1.0))
+
+    cond_dt_fixed_ax.set_ylabel(r'P(t$_0$ + {}, t$_0$)'.format(int(fixed_dt)), fontproperties=framelabelfont)
+    cond_dt_fixed_ax.set_xlabel(r't$_0$ [years]', fontproperties=framelabelfont)
+    
+    fname3 = 'cond_prob_30_vs_time.png'
+    
+    if fname_tag is not None:
+        outfile3 = 'local/'+fname_tag+'_'+fname3
+    else:
+        outfile3 = 'local/'+fname3
+                
+    mplt.savefig(outfile3, dpi=res)
+
+
+    #---------------------------------------------------------------------------
+    # Plot t = t0 + dt vs. P(t, t0) for various t0.
+    #---------------------------------------------------------------------------
+    fig4 = mplt.figure(figsize=(imwi, imhi), dpi=res)
+    
+    #cond_spw = math.ceil((imw - lm - rm - sphs)/2.0)
+    #cond_ax = fig.add_axes((lm/imw, (bm + 1.0*sph + 2.0*smh + 3.0*spvs)/imh, cond_spw/imw, sph/imh))
+    cond_ax = fig4.add_subplot(111)
+
+    t0s_to_plot = [k for k in conditional.keys() if k <= 150]
+    
+    for t0 in sorted(t0s_to_plot):
+        if conditional[t0] is not None:
+            color = sp_line_colormap(float(t0)/float(max(t0s_to_plot)))
+            cond_ax.plot(conditional[t0]['x'], conditional[t0]['y'], color=color, linewidth=sp_line_width, label='{}'.format(t0))
+
+
+    # set the fonts for the tick labels
+    for label in cond_ax.xaxis.get_ticklabels()+cond_ax.yaxis.get_ticklabels():
+        label.set_fontproperties(ticklabelfont)
+
+    cond_ax.set_xlim((0.0, max(conditional.keys())))
+    cond_ax.set_ylim((0.0, 1.0))
+
+    cond_ax.set_ylabel(r'P(t, t$_0$)', fontproperties=framelabelfont)
+    cond_ax.set_xlabel(r't = t$_0$ + $\Delta$t [years]', fontproperties=framelabelfont)
+    
+    cond_ax.legend(title=r't$_0$=', prop=legendfont, loc=legend_loc)
+    
+    fname4 = 'cum_prob_vs_multi_t0.png'
+    
+    if fname_tag is not None:
+        outfile4 = 'local/'+fname_tag+'_'+fname4
+    else:
+        outfile4 = 'local/'+fname4
+                
+    mplt.savefig(outfile4, dpi=res)
+
+
+    #---------------------------------------------------------------------------
+    # Plot t0 vs dt.
+    #---------------------------------------------------------------------------
+    fig5 = mplt.figure(figsize=(imwi, imhi), dpi=res)
+    
+    #t0_dt_spw = math.ceil((imw - lm - rm - sphs)/2.0)
+    #t0_dt_ax = fig.add_axes(((lm + cond_spw + sphs)/imw, (bm + 1.0*sph + 2.0*smh + 3.0*spvs)/imh, t0_dt_spw/imw, sph/imh))
+    t0_dt_ax = fig5.add_subplot(111)
+
+
+    percents = t0_dt.keys()
+    t0_dt_ax.fill_between(t0_dt[min(percents)]['x'], t0_dt[min(percents)]['y'], y2=t0_dt[max(percents)]['y'], linewidth=0, facecolor=t0_dt_range_color)
+    
+    for percent in t0_dt.iterkeys():
+        if percent == min(percents):
+            linewidth = t0_dt_sub_line_width
+            color = t0_dt_sub_line_color
+            linestyle = '--'
+        elif percent == max(percents):
+            linewidth = t0_dt_sub_line_width
+            color = t0_dt_sub_line_color
+            linestyle = ':'
+        else:
+            linewidth = t0_dt_main_line_width
+            color = t0_dt_main_line_color
+            linestyle = '-'
+        t0_dt_ax.plot(t0_dt[percent]['x'], t0_dt[percent]['y'], color=color, linewidth=linewidth, linestyle=linestyle, label='{}%'.format(percent))
+    
+    # set the fonts for the tick labels
+    for label in t0_dt_ax.xaxis.get_ticklabels()+t0_dt_ax.yaxis.get_ticklabels():
+        label.set_fontproperties(ticklabelfont)
+
+    t0_dt_ax.set_ylabel(r'$\Delta$t [years]', fontproperties=framelabelfont)
+    t0_dt_ax.set_xlabel(r't$_0$ [years]', fontproperties=framelabelfont)
+
+    t0_dt_ax.legend(title='event prob.', prop=legendfont, loc=legend_loc, handlelength=5)
+    
+    
+    fname5 = 't0_vs_dt.png'
+    
+    if fname_tag is not None:
+        outfile5 = 'local/'+fname_tag+'_'+fname5
+    else:
+        outfile5 = 'local/'+fname5
+                
+    mplt.savefig(outfile5, dpi=res)
+
+    
+    
+    #---------------------------------------------------------------------------
+    # Plot the section probability matrix.
+    #---------------------------------------------------------------------------
+    #prob_spw = imw - lm - rm
+    #prob_sph = sph - prob_cbh - prob_cbs
+    imwi    = 1000/res
+    imhi    = 400/res
+    fig6    = mplt.figure(figsize=(imwi, imhi), dpi=res)
+    prob_ax = fig6.add_axes((0.075,.21,.9,.78))
+    
+    #prob_ax = fig.add_axes((lm/imw, (bm + 2.0*smh + 2.0*spvs + prob_cbh + prob_cbs)/imh, prob_spw/imw, prob_sph/imh))
+    
+    prob_ax.imshow(matrix_prob[filtered_sections_pos,:], aspect='auto', interpolation='none', cmap=matrix_cmap)
+
+    prob_ax.set_xticks(range(0,len(all_sections),10))
+    prob_ax.set_xticklabels([all_sections[x] for x in range(0,len(all_sections),10)])
+
+    if section_filter is not None:
+        prob_ax.set_yticks(range(len(section_filter['filter'])))
+        prob_ax.set_yticklabels(section_filter['filter'])
+
+    # set the fonts for the tick labels
+    for label in prob_ax.xaxis.get_ticklabels()+prob_ax.yaxis.get_ticklabels():
+        label.set_fontproperties(ticklabelfont)
+
+    prob_ax.set_ylabel('to section', fontproperties=framelabelfont)
+    prob_ax.set_xlabel('from section', fontproperties=framelabelfont)
+
+    # Create the colorbar
+    #prob_cb_ax  = fig.add_axes((lm/imw, (bm + 2.0*smh + 2.0*spvs)/imh, prob_spw/imw, prob_cbh/imh))
+    prob_cb_ax   = fig6.add_axes((0.075,0.05,.9,.05))
+    #norm = mcolor.Normalize(vmin=matrix_prob[filtered_sections_pos,:].min(), vmax=matrix_prob[filtered_sections_pos,:].max())
+    cb = mcolorbar.ColorbarBase(prob_cb_ax, cmap=matrix_cmap,
+               #norm=norm,
+               orientation='horizontal')
+    #ticks = map(float, [self.min_mag,(self.min_mag+ self.max_mag)/2.0, self.max_mag])
+    cb.set_ticks((0,1))
+    cb.set_ticklabels(('least likely','most likely'))
+    
+    # Style and cleanup the colorbar ticks
+    for n, label in enumerate(prob_cb_ax.xaxis.get_ticklabels()):
+        label.set_fontproperties(cbticklabelfont)
+        if n == 0:
+            label.set_ha('left')
+        elif n == len(prob_cb_ax.xaxis.get_ticklabels()) - 1:
+            label.set_ha('right')
+    for line in prob_cb_ax.xaxis.get_ticklines():
+        line.set_alpha(0)
+    
+    # Set the colorbar label
+    #prob_cb_ax.set_xlabel('Probability',position=(0,0), ha='left', fontproperties=cbtitlefont)
+
+    fname6 = 'trans_prob_matrix.png'
+    
+    if fname_tag is not None:
+        outfile6 = 'local/'+fname_tag+'_'+fname6
+    else:
+        outfile6 = 'local/'+fname6
+                
+    mplt.savefig(outfile6, dpi=res)
+
+    
+    #---------------------------------------------------------------------------
+    # Plot the event sequence maps.
+    #---------------------------------------------------------------------------
+    imw     = 816.0
+    imh     = 544.0
+    imwi    = imw/res
+    imhi    = imh/res
+    fig6    = mplt.figure(figsize=(imwi, imhi), dpi=res)
+
+    map_row = 2.0
+    map_num = 0
+    for sequence, val in sorted(sequences.iteritems(), key=itemgetter(1), reverse=True)[0:6]:
+        
+        sequence_list = [int(x) for x in sequence.split('->')]
+        
+        sm = Basemap(
+            llcrnrlon=min_lon,
+            llcrnrlat=min_lat,
+            urcrnrlon=max_lon,
+            urcrnrlat=max_lat,
+            lat_0=(max_lat+min_lat)/2.0,
+            lon_0=(max_lon+min_lon)/2.0,
+            resolution=map_res,
+            projection=map_proj,
+            suppress_ticks=True
+        )
+        
+        if map_num%3 == 0:
+            map_row -= 1.0
+        
+        left   = (lm + map_num%3*(sphs+smw))/imw
+        bottom = (bm + map_row*(smh+spvs))/imh
+        width  = smw/imw
+        height = smh/imh
+        sm.ax  = fig6.add_axes((left, bottom, width, height))
+
+        # Draw a frame around the map.
+        sm.drawmapboundary(color=map_frame_color, linewidth=map_frame_width, fill_color=water_color)
+        
+        # Fill the continents and lakes.
+        sm.fillcontinents(color=seq_land_color, lake_color=water_color)
+        
+        # draw coastlines, edge of map.
+        sm.drawcoastlines(color=coastline_color, linewidth=coastline_width-0.5)
+
+        # draw countries
+        sm.drawcountries(linewidth=country_width-0.5, color=country_color)
+
+        # draw states
+        sm.drawstates(linewidth=state_width-0.5, color=state_color)
+
+        # print faults on lon-lat plot
+        for sid, sec_trace in fault_traces_latlon.iteritems():
+            trace_Xs, trace_Ys = sm(sec_trace[1], sec_trace[0])
+            
+            if section_filter is not None and sid in section_filter['filter']:
+                linewidth = seq_fault_width_max
+                color = sequence_cmap(1.0-float(5.0)/5.0)
+            elif sid in sequence_list:
+                seq_pos = sequence_list.index(sid)
+                linewidth = vcutils.linear_interp(seq_pos, 0, 5, seq_fault_width_min, seq_fault_width_max)
+                color = sequence_cmap(1.0-float(seq_pos)/5.0)
+            else:
+                linewidth = fault_width
+                color = alt_fault_color
+
+            sm.plot(trace_Xs, trace_Ys, color=color, linewidth=linewidth, solid_capstyle='round', solid_joinstyle='round')
+        
+        text_left = 0.0
+        for n, sid in enumerate(sequence_list):
+            if sid < 10:
+                text_width = 25.0
+            elif sid >=10 and sid<100:
+                text_width = 30.0
+            else:
+                text_width = 35.0
+
+            if n == 0 or n == 1:
+                color = '#000000'
+            else:
+                color = '#ffffff'
+            
+            sm.ax.text(text_left/smw, -17.0/smh, r'{} $\rightarrow$ '.format(sid), ha='left', color=color, fontproperties=smtitlefont, bbox=dict(facecolor=sequence_cmap(1.0-float(n)/5.0), edgecolor='none'), transform=sm.ax.transAxes)
+            text_left += text_width
+
+        sm.ax.text(text_left/smw, -17.0/smh, r'{} $\ldots$ {}'.format(section_filter['filter'][0], section_filter['filter'][-1]), ha='left', color='#ffffff', fontproperties=smtitlefont, bbox=dict(facecolor=sequence_cmap(0), edgecolor='none'), transform=sm.ax.transAxes)
+        
+        #sm.ax.set_xlabel(r' $\rightarrow$ '.join(sequence.split('->')) + r' $\rightarrow$  $\times$' ,position=(0,0), ha='left', fontproperties=smtitlefont)
+
+        map_num += 1
+    
+    
+    
+    
+    fname7 = 'hi_prob_sequences.png'
+    
+    if fname_tag is not None:
+        outfile7 = 'local/'+fname_tag+'_'+fname7
+    else:
+        outfile7 = 'local/'+fname7
+                
+    mplt.savefig(outfile7, dpi=res)
+    
+
+
 
 
 #-------------------------------------------------------------------------------

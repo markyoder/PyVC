@@ -10,7 +10,7 @@ import matplotlib.pyplot as mplt
 import itertools
 from collections import deque
 
-def cum_prob(sim_file, output_file=None, event_range=None, section_filter=None, magnitude_filter=None):
+def cum_prob(sim_file, output_file, event_range=None, section_filter=None, magnitude_filter=None,plot_type=1):
     with VCSimData() as sim_data:
         # open the simulation data file
         sim_data.open_file(sim_file)
@@ -28,39 +28,44 @@ def cum_prob(sim_file, output_file=None, event_range=None, section_filter=None, 
                 if n != 0]
     
     # t vs P(t)
-    #mplt.plot([x for x in sorted(intervals)], [float(n)/float(len(intervals)) for n,x in enumerate(sorted(intervals))])
-    
+    if plot_type ==1:
+        mplt.plot([x for x in sorted(intervals)], [float(n)/float(len(intervals)) for n,x in enumerate(sorted(intervals))])
     # t0 vs P(t0 + dt, t0)
-    '''
-    dt = 100
+    elif plot_type == 2:
+        dt = 100
     
-    t0s = []
-    pts = []
+        t0s = []
+        pts = []
     
-    for t0 in [0.0] + [x for x in sorted(intervals)]:
-        intervals = [x - event_data['event_year'][n-1] for n,x in enumerate(event_data['event_year']) if n != 0 and x - event_data['event_year'][n-1] > t0+dt]
-        intervals_t0 = [x - event_data['event_year'][n-1] for n,x in enumerate(event_data['event_year']) if n != 0 and x - event_data['event_year'][n-1] > t0]
-        
-        if len(intervals_t0) != 0:
-            t0s.append(t0)
-            pts.append(1.0 - float(len(intervals))/float(len(intervals_t0)))
-    
-    mplt.plot(t0s,pts)
-    '''
-    
-    # t=t0+dt vs P(t,t0)
-    for t0 in range(0,175,25):
-        ts = []
-        P_t_t0 = []
-        intervals_t0 = [x - event_data['event_year'][n-1] for n,x in enumerate(event_data['event_year']) if n != 0 and x - event_data['event_year'][n-1] > t0]
-        for dt in range(250):
+        for t0 in [0.0] + [x for x in sorted(intervals)]:
             intervals = [x - event_data['event_year'][n-1] for n,x in enumerate(event_data['event_year']) if n != 0 and x - event_data['event_year'][n-1] > t0+dt]
-
+            intervals_t0 = [x - event_data['event_year'][n-1] for n,x in enumerate(event_data['event_year']) if n != 0 and x - event_data['event_year'][n-1] > t0]
+        
             if len(intervals_t0) != 0:
-                ts.append(t0+dt)
-                P_t_t0.append(1.0 - float(len(intervals))/float(len(intervals_t0)))
+                t0s.append(t0)
+                pts.append(1.0 - float(len(intervals))/float(len(intervals_t0)))
+    
+        mplt.plot(t0s,pts)
+    # t=t0+dt vs P(t,t0)
+    elif plot_type == 3:
+        for t0 in range(0,175,25):
+            ts = []
+            P_t_t0 = []
+            intervals_t0 = [x - event_data['event_year'][n-1] for n,x in enumerate(event_data['event_year']) if n != 0 and x - event_data['event_year'][n-1] > t0]
+            for dt in range(250):
+                intervals = [x - event_data['event_year'][n-1] for n,x in enumerate(event_data['event_year']) if n != 0 and x - event_data['event_year'][n-1] > t0+dt]
 
-        mplt.plot(ts,P_t_t0)
+                if len(intervals_t0) != 0:
+                    ts.append(t0+dt)
+                    P_t_t0.append(1.0 - float(len(intervals))/float(len(intervals_t0)))
+
+            mplt.plot(ts,P_t_t0)
+            
+    else:
+        sys.exit("Error, choose plot_type = 1, 2, or 3!")
+        
+    mplt.savefig(output_file,dpi=100)
+    sys.stdout.write("\Plot saved to: "+output_file+'\n')
     
     return event_data['event_year']
 
