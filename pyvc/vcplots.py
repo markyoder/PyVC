@@ -31,8 +31,13 @@ from networkx.algorithms import bipartite
 import quakelib
 
 
+#-------------------------------------------------------------------------------
+# Save all forecast plots in one column of many subplots  
+#-------------------------------------------------------------------------------
+def plot_forecast(sim_file, output_file=None, event_graph_file=None, 
+    event_sequence_graph_file=None, event_range=None, section_filter=None,
+    magnitude_filter=None, padding=0.08, fixed_dt=30.0):
 
-def plot_forecast(sim_file, event_graph_file=None, event_sequence_graph_file=None, output_file=None, event_range=None, section_filter=None, magnitude_filter=None, padding=0.08, fixed_dt=30.0):
     #---------------------------------------------------------------------------
     # Plot parameters.
     #---------------------------------------------------------------------------
@@ -629,7 +634,7 @@ def plot_forecast(sim_file, event_graph_file=None, event_sequence_graph_file=Non
 
 
 #-------------------------------------------------------------------------------
-# New method, to save each individual subplot from plot_forecast
+# Save each individual subplot from plot_forecast
 #-------------------------------------------------------------------------------
 def forecast_plots(sim_file, event_graph_file=None, event_sequence_graph_file=None, event_range=None, section_filter=None, magnitude_filter=None, padding=0.08, fixed_dt=30.0, fname_tag=None):
     #---------------------------------------------------------------------------
@@ -639,9 +644,9 @@ def forecast_plots(sim_file, event_graph_file=None, event_sequence_graph_file=No
     # Image height is set based on the sub plots.
     sph = 200.0 # The sub-plot height
     # Sub-plot width is based on the specific sub-plot.
-    lm = 50.0
+    lm = 15.0
     rm = 15.0
-    tm = 40.0
+    tm = 15.0
     bm = 20.0
     sphs = 40.0 # The sub-plot horizontal spacing.
     spvs = 40.0 # The sub-plot vertical spacing.
@@ -655,11 +660,11 @@ def forecast_plots(sim_file, event_graph_file=None, event_sequence_graph_file=No
     titlefont1 = mfont.FontProperties(family='Arial', style='normal', variant='normal', size=12)
     titlefont2 = mfont.FontProperties(family='Arial', style='normal', variant='normal', size=14, weight='bold')
     sectionkeyfont = mfont.FontProperties(family='Arial', style='normal', variant='normal', size=10)
-    ticklabelfont = mfont.FontProperties(family='Arial', style='normal', variant='normal', size=17)
-    framelabelfont = mfont.FontProperties(family='Arial', style='normal', variant='normal', size=17)
-    legendfont = mfont.FontProperties(family='Arial', style='normal', variant='normal', size=19)
-    smtitlefont = mfont.FontProperties(family='Arial', style='normal', variant='normal', size=15, weight='bold')
-    cbticklabelfont = mfont.FontProperties(family='Arial', style='normal', variant='normal', size=15)
+    ticklabelfont = mfont.FontProperties(family='Arial', style='normal', variant='normal', size=14)
+    framelabelfont = mfont.FontProperties(family='Arial', style='normal', variant='normal', size=14)
+    legendfont = mfont.FontProperties(family='Arial', style='normal', variant='normal', size=12)
+    smtitlefont = mfont.FontProperties(family='Arial', style='normal', variant='normal', size=12, weight='bold')
+    cbticklabelfont = mfont.FontProperties(family='Arial', style='normal', variant='normal', size=12)
     
     matrix_cmap = mplt.get_cmap('hot_r')
     sequence_cmap = mplt.get_cmap('autumn')
@@ -707,6 +712,14 @@ def forecast_plots(sim_file, event_graph_file=None, event_sequence_graph_file=No
     forcast_title_line_spacing = 20.0
     
     legend_loc='best'
+    
+    
+    if section_filter is not None:
+        num_secs = len(section_filter['filter'])
+    else:
+        sys.exit("***Error, must specify sections for a forecast.\n\t e.g. section_filter={'filter':(27,83)}\n")
+     
+
 
     #---------------------------------------------------------------------------
     # Get the data.
@@ -790,8 +803,17 @@ def forecast_plots(sim_file, event_graph_file=None, event_sequence_graph_file=No
     # t = t0 + dt vs. P(t, t0) for various t0.
     #---------------------------------------------------------------------------
     conditional = {}
-
+    
+    # Don't want to plot recurrence times that don't occur
+    max_t0 = 275
     for t0 in range(0,275,25):
+        int_t0 = intervals[np.where( intervals > t0)]
+        if int_t0.size == 0:
+            if t0 < max_t0:
+                max_t0 = t0
+            
+    max_t0 += 50        
+    for t0 in range(0,max_t0,25):
         int_t0 = intervals[np.where( intervals > t0)]
         if int_t0.size != 0:
             conditional[t0] = {'x':[],'y':[]}
@@ -960,12 +982,8 @@ def forecast_plots(sim_file, event_graph_file=None, event_sequence_graph_file=No
     # Plot t vs. P(t).
     #---------------------------------------------------------------------------
 
-    # Same plot size for each probability plot
-    prob_width  = 900
-    prob_height = 600
-
-    imwi = prob_width/res
-    imhi = prob_height/res
+    imwi = imw/(res*1.5)
+    imhi = sph*2.0/res
     
     fig2    = mplt.figure(figsize=(imwi, imhi), dpi=res)
     cum_ax  = fig2.add_subplot(111)
@@ -1116,8 +1134,11 @@ def forecast_plots(sim_file, event_graph_file=None, event_sequence_graph_file=No
     #---------------------------------------------------------------------------
     #prob_spw = imw - lm - rm
     #prob_sph = sph - prob_cbh - prob_cbs
-    imwi    = 1000/res
-    imhi    = 400/res
+    # More forecast sections => more height needed in matrix
+    mat_height = (1.0 + num_secs/5)*80.0
+    
+    imwi    = imw/res
+    imhi    = mat_height/res
     fig6    = mplt.figure(figsize=(imwi, imhi), dpi=res)
     prob_ax = fig6.add_axes((0.075,.21,.9,.78))
     
