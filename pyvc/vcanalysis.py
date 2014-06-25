@@ -69,6 +69,26 @@ def cum_prob(sim_file, output_file, event_range=None, section_filter=None, magni
     
     return event_data['event_year']
 
+#-------------------------------------------------------------------------------
+def weibull(x_array,beta,tau):
+    if len(x_array) < 2:
+        sys.exit("Input must be an array")
+    else:
+        return np.array([1-np.exp( -(x/float(tau))**beta) for x in x_array])
+        
+#-------------------------------------------------------------------------------
+def cond_weibull(x_array,t0,beta,tau):
+    if len(x_array) < 2:
+        sys.exit("Input must be an array")
+    else:
+        return np.array([1-np.exp( (t0/float(tau))**beta - (x/float(tau))**beta) for x in x_array])
+
+#-------------------------------------------------------------------------------
+def cond_weibull_fixed_dt(x_array,dt,beta,tau):
+    if len(x_array) < 2:
+        sys.exit("Input must be an array")
+    else:
+        return np.array([1-np.exp( (x/float(tau))**beta - ((x+dt)/float(tau))**beta) for x in x_array])
 
 #-------------------------------------------------------------------------------
 # Prints out various information about a simulation.
@@ -139,9 +159,9 @@ def event_sections(sim_file,evnum):
         elements = events.get_event_elements(evnum)
         sections = geometry.sections_with_elements(elements)
         
-        print 'event {}'.format(evnum)    
+        sys.stdout.write('event {}'.format(evnum))    
         for secid in sections:
-            print '{sec:<10}{name:<10}'.format(sec=secid,name=geometry.get_section_name(secid))
+            sys.stdout.write('{sec:<10}{name:<10}'.format(sec=secid,name=geometry.get_section_name(secid)))
     
 
 

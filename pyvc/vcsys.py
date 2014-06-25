@@ -1,6 +1,6 @@
 #!/usr/bin/env python
-from . import vcexceptions
-from . import vcsimdata
+from pyvc import vcexceptions
+from pyvc import vcsimdata
 
 #-------------------------------------------------------------------------------
 # The base class for Virtual California simulation objects.

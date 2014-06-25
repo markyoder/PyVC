@@ -636,7 +636,8 @@ def plot_forecast(sim_file, output_file=None, event_graph_file=None,
 #-------------------------------------------------------------------------------
 # Save each individual subplot from plot_forecast
 #-------------------------------------------------------------------------------
-def forecast_plots(sim_file, event_graph_file=None, event_sequence_graph_file=None, event_range=None, section_filter=None, magnitude_filter=None, padding=0.08, fixed_dt=30.0, fname_tag=None):
+def forecast_plots(sim_file, event_graph_file=None, event_sequence_graph_file=None, event_range=None, section_filter=None, magnitude_filter=None, padding=0.08, fixed_dt=30.0, fname_tag=None,weibull=False,
+    tau=166.0,beta=1.5):
     #---------------------------------------------------------------------------
     # Plot parameters.
     #---------------------------------------------------------------------------
@@ -662,6 +663,7 @@ def forecast_plots(sim_file, event_graph_file=None, event_sequence_graph_file=No
     sectionkeyfont = mfont.FontProperties(family='Arial', style='normal', variant='normal', size=10)
     ticklabelfont = mfont.FontProperties(family='Arial', style='normal', variant='normal', size=14)
     framelabelfont = mfont.FontProperties(family='Arial', style='normal', variant='normal', size=14)
+    mapticklabelfont = mfont.FontProperties(family='Arial', style='normal', variant='normal', size=19)
     legendfont = mfont.FontProperties(family='Arial', style='normal', variant='normal', size=12)
     smtitlefont = mfont.FontProperties(family='Arial', style='normal', variant='normal', size=12, weight='bold')
     cbticklabelfont = mfont.FontProperties(family='Arial', style='normal', variant='normal', size=12)
@@ -754,6 +756,12 @@ def forecast_plots(sim_file, event_graph_file=None, event_sequence_graph_file=No
                     if n != 0
                 ])
     
+    avg_interval = np.average(intervals)
+    max_interval = intervals.max()
+    
+    sys.stdout.write('\navg interval\tmax interval\n')
+    sys.stdout.write('{:.2f}\t\t{:.2f}\n\n'.format(avg_interval,max_interval))
+
     
     # Calculate the lat-lon range based on the min-max and the padding
     lon_range = max_lon - min_lon
@@ -775,6 +783,26 @@ def forecast_plots(sim_file, event_graph_file=None, event_sequence_graph_file=No
          fault_traces_latlon[secid] = zip(*[(lambda y: (y.lat(),y.lon()))(convert.convert2LatLon(quakelib.Vec3(x[0], x[1], x[2]))) for x in fault_traces[secid]])
     
     ''''''
+    # Don't want to plot recurrence times longer than those that actually occur
+    #   and want to dynamically select the number of curves
+    max_t0      = int(max_interval)
+    
+    # Want somewhere between 4 and 6 different t0 values for conditional plots
+    if max_t0 < 160:
+        t0_step = 25
+        max_t0_cond = 100
+    elif max_t0 >= 160 and max_t0 < 250:
+        t0_step = 30
+        max_t0_cond = 125
+    elif max_t0 >= 250 and max_t0 < 370:
+        t0_step = 40
+        max_t0_cond = 150
+    else:
+        t0_step = 50
+        max_t0_cond = 250
+    
+    
+    
     #---------------------------------------------------------------------------
     # t vs. P(t).
     #---------------------------------------------------------------------------
@@ -782,8 +810,6 @@ def forecast_plots(sim_file, event_graph_file=None, event_sequence_graph_file=No
     
     cumulative['x'] = np.sort(intervals)
     cumulative['y'] = np.arange(float(intervals.size))/float(intervals.size)
-    #cumulative['y'] = [float(n)/float(len(intervals)) for n,x in enumerate(cumulative['x'])]
-    #mplt.plot(np.sort(intervals), [float(n)/float(len(intervals)) for n,x in enumerate(np.sort(intervals))])
     
     #---------------------------------------------------------------------------
     # t0 vs. P(t0 + dt, t0) for fixed dt.
@@ -791,7 +817,15 @@ def forecast_plots(sim_file, event_graph_file=None, event_sequence_graph_file=No
     
     conditional_dt_fixed = {'x':[],'y':[]}
     
-    for t0 in np.sort(intervals):
+    # To avoid the P(t0+30,t0) plot -> 0 at large t0, add extra t0 value to plot
+    #   such that there is one extra t0 value (just less than the max t0) to 
+    #   ensure the P(t0+30,t0) plot -> 1
+    
+    #cond_dt_fixed_t0_to_plot = np.append(np.sort(intervals)[:-1],[intervals.max()-t0_step*.1,intervals.max()])
+    cond_dt_fixed_t0_to_plot = np.arange(0.0,max_t0+1.0,1.0)
+    
+    
+    for t0 in cond_dt_fixed_t0_to_plot:
         int_t0_dt = intervals[np.where( intervals > t0+fixed_dt)]
         int_t0 = intervals[np.where( intervals > t0)]
         
@@ -803,21 +837,13 @@ def forecast_plots(sim_file, event_graph_file=None, event_sequence_graph_file=No
     # t = t0 + dt vs. P(t, t0) for various t0.
     #---------------------------------------------------------------------------
     conditional = {}
-    
-    # Don't want to plot recurrence times that don't occur
-    max_t0 = 275
-    for t0 in range(0,275,25):
-        int_t0 = intervals[np.where( intervals > t0)]
-        if int_t0.size == 0:
-            if t0 < max_t0:
-                max_t0 = t0
+
             
-    max_t0 += 50        
-    for t0 in range(0,max_t0,25):
+    for t0 in range(0,max_t0,t0_step):
         int_t0 = intervals[np.where( intervals > t0)]
         if int_t0.size != 0:
             conditional[t0] = {'x':[],'y':[]}
-            for dt in range(250):
+            for dt in range(max_t0-t0):
                 int_t0_dt = intervals[np.where( intervals > t0+dt)]
                 conditional[t0]['x'].append(t0+dt)
                 conditional[t0]['y'].append(1.0 - float(int_t0_dt.size)/float(int_t0.size))
@@ -838,6 +864,7 @@ def forecast_plots(sim_file, event_graph_file=None, event_sequence_graph_file=No
                 t0_dt[int(percent*100)]['x'].append(t0)
                 t0_dt[int(percent*100)]['y'].append(conditional[t0]['x'][index]-t0)
         
+    """    
     #---------------------------------------------------------------------------
     # Section probability matrix
     #---------------------------------------------------------------------------
@@ -873,6 +900,7 @@ def forecast_plots(sim_file, event_graph_file=None, event_sequence_graph_file=No
                     sequences[sequence] += 1
                 except KeyError:
                     sequences[sequence] = 1
+    """
     
     #---------------------------------------------------------------------------
     # Set up the plot.
@@ -938,7 +966,7 @@ def forecast_plots(sim_file, event_graph_file=None, event_sequence_graph_file=No
         parallels,
         labels=[1,0,0,0],
         color=grid_color,
-        fontproperties=ticklabelfont,
+        fontproperties=mapticklabelfont,
         fmt='%.2f',
         linewidth=grid_width,
         dashes=[1, 10]
@@ -950,7 +978,7 @@ def forecast_plots(sim_file, event_graph_file=None, event_sequence_graph_file=No
         meridians,
         labels=[0,0,1,0],
         color=grid_color,
-        fontproperties=ticklabelfont,
+        fontproperties=mapticklabelfont,
         fmt='%.2f',
         linewidth=grid_width,
         dashes=[1, 10]
@@ -993,6 +1021,11 @@ def forecast_plots(sim_file, event_graph_file=None, event_sequence_graph_file=No
 
     cum_ax.plot(cumulative['x'], cumulative['y'], color=sp_line_color, linewidth=sp_line_width)
     
+    #  Plot the weibull distribution -------------------------------------------
+    if weibull:
+        cum_ax.plot(cumulative['x'], vcanalysis.weibull(cumulative['x'],beta,tau),color='k',linewidth=sp_line_width-1.0)
+    
+    
     # set the fonts for the tick labels
     for label in cum_ax.xaxis.get_ticklabels()+cum_ax.yaxis.get_ticklabels():
         label.set_fontproperties(ticklabelfont)
@@ -1022,6 +1055,11 @@ def forecast_plots(sim_file, event_graph_file=None, event_sequence_graph_file=No
 
     cond_dt_fixed_ax.plot(conditional_dt_fixed['x'], conditional_dt_fixed['y'], color=sp_line_color, linewidth=sp_line_width)
     
+    if weibull:
+        weibull_vals = vcanalysis.cond_weibull_fixed_dt(conditional_dt_fixed['x'],fixed_dt,beta,tau)
+        cond_dt_fixed_ax.plot(conditional_dt_fixed['x'],weibull_vals, color='k', linewidth=sp_line_width-1.0)
+    
+    
     # set the fonts for the tick labels
     for label in cond_dt_fixed_ax.xaxis.get_ticklabels()+cond_dt_fixed_ax.yaxis.get_ticklabels():
         label.set_fontproperties(ticklabelfont)
@@ -1050,12 +1088,14 @@ def forecast_plots(sim_file, event_graph_file=None, event_sequence_graph_file=No
     #cond_ax = fig.add_axes((lm/imw, (bm + 1.0*sph + 2.0*smh + 3.0*spvs)/imh, cond_spw/imw, sph/imh))
     cond_ax = fig4.add_subplot(111)
 
-    t0s_to_plot = [k for k in conditional.keys() if k <= 150]
+    t0s_to_plot = [k for k in conditional.keys() if k <= max_t0_cond]
     
     for t0 in sorted(t0s_to_plot):
         if conditional[t0] is not None:
             color = sp_line_colormap(float(t0)/float(max(t0s_to_plot)))
             cond_ax.plot(conditional[t0]['x'], conditional[t0]['y'], color=color, linewidth=sp_line_width, label='{}'.format(t0))
+            if weibull:
+                cond_ax.plot(conditional[t0]['x'], vcanalysis.cond_weibull(conditional[t0]['x'],t0,beta,tau), color='k', linewidth=sp_line_width-1.0)
 
 
     # set the fonts for the tick labels
@@ -1128,7 +1168,7 @@ def forecast_plots(sim_file, event_graph_file=None, event_sequence_graph_file=No
     mplt.savefig(outfile5, dpi=res)
 
     
-    
+    """
     #---------------------------------------------------------------------------
     # Plot the section probability matrix.
     #---------------------------------------------------------------------------
@@ -1296,7 +1336,7 @@ def forecast_plots(sim_file, event_graph_file=None, event_sequence_graph_file=No
         outfile7 = 'local/'+fname7
                 
     mplt.savefig(outfile7, dpi=res)
-    
+    """
 
 
 
