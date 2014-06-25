@@ -9,6 +9,8 @@ To see what the new PyVC can do, run python pyvc_tests.py from the command line.
 == DEPENDENCIES ==
 
 python 2.7 
+PIL (python imaging library)
+GeographicLib 
 PyTables 3.XX
 matplotlib 
 numpy 

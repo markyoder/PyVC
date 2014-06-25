@@ -788,12 +788,12 @@ def forecast_plots(sim_file, event_graph_file=None, event_sequence_graph_file=No
     max_t0      = int(max_interval)
     
     # Want somewhere between 4 and 6 different t0 values for conditional plots
-    if max_t0 < 160:
+    if max_t0 < 200:
         t0_step = 25
         max_t0_cond = 100
-    elif max_t0 >= 160 and max_t0 < 250:
+    elif max_t0 >= 200 and max_t0 < 250:
         t0_step = 30
-        max_t0_cond = 125
+        max_t0_cond = 90
     elif max_t0 >= 250 and max_t0 < 370:
         t0_step = 40
         max_t0_cond = 150
@@ -817,11 +817,10 @@ def forecast_plots(sim_file, event_graph_file=None, event_sequence_graph_file=No
     
     conditional_dt_fixed = {'x':[],'y':[]}
     
-    # To avoid the P(t0+30,t0) plot -> 0 at large t0, add extra t0 value to plot
-    #   such that there is one extra t0 value (just less than the max t0) to 
-    #   ensure the P(t0+30,t0) plot -> 1
-    
-    #cond_dt_fixed_t0_to_plot = np.append(np.sort(intervals)[:-1],[intervals.max()-t0_step*.1,intervals.max()])
+    # To avoid the P(t0+30,t0) plot -> 0 at large t0, the probabilities are evaluated
+    #  at incremental values up to the max interval, instead of evaluated at every
+    #  interval
+      
     cond_dt_fixed_t0_to_plot = np.arange(0.0,max_t0+1.0,1.0)
     
     
