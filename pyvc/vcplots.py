@@ -637,7 +637,7 @@ def plot_forecast(sim_file, output_file=None, event_graph_file=None,
 # Save each individual subplot from plot_forecast
 #-------------------------------------------------------------------------------
 def forecast_plots(sim_file, event_graph_file=None, event_sequence_graph_file=None, event_range=None, section_filter=None, magnitude_filter=None, padding=0.08, fixed_dt=30.0, fname_tag=None,weibull=False,
-    tau=166.0,beta=1.5):
+    tau=166.0,beta=1.5,year_eval=None):
     #---------------------------------------------------------------------------
     # Plot parameters.
     #---------------------------------------------------------------------------
@@ -758,9 +758,16 @@ def forecast_plots(sim_file, event_graph_file=None, event_sequence_graph_file=No
     
     avg_interval = np.average(intervals)
     max_interval = intervals.max()
+    num_events   = len(event_data['event_year'])
     
-    sys.stdout.write('\navg interval\tmax interval\n')
-    sys.stdout.write('{:.2f}\t\t{:.2f}\n\n'.format(avg_interval,max_interval))
+    
+    # Print out the relevant summary data
+    sys.stdout.write('\n\n=======================================')
+    sys.stdout.write('\n{} earthquakes \n'.format(num_events))
+    sys.stdout.write('---------------------------------------\n')
+    sys.stdout.write('avg interval\tmax interval\n')
+    sys.stdout.write('{:.2f}\t\t{:.2f}\n'.format(avg_interval,max_interval))
+    sys.stdout.write('---------------------------------------\n')
 
     
     # Calculate the lat-lon range based on the min-max and the padding
@@ -788,18 +795,24 @@ def forecast_plots(sim_file, event_graph_file=None, event_sequence_graph_file=No
     max_t0      = int(max_interval)
     
     # Want somewhere between 4 and 6 different t0 values for conditional plots
-    if max_t0 < 200:
-        t0_step = 25
-        max_t0_cond = 100
+    if max_t0 < 180:
+        t0_step = 20
+        max_t0_cond = 80
+        t0_plot_step = 3.0
     elif max_t0 >= 200 and max_t0 < 250:
         t0_step = 30
-        max_t0_cond = 90
+        max_t0_cond = 120
+        t0_plot_step = 4.0
     elif max_t0 >= 250 and max_t0 < 370:
         t0_step = 40
         max_t0_cond = 150
+        t0_plot_step = 5.0
     else:
-        t0_step = 50
-        max_t0_cond = 250
+        t0_step      = 50
+        max_t0_cond  = 250
+        t0_plot_step = 10.0
+        
+    t0_for_multi_t0_plot = np.arange(0.0,max_t0_cond+t0_step*.1,t0_step)
     
     
     
@@ -820,11 +833,11 @@ def forecast_plots(sim_file, event_graph_file=None, event_sequence_graph_file=No
     # To avoid the P(t0+30,t0) plot -> 0 at large t0, the probabilities are evaluated
     #  at incremental values up to the max interval, instead of evaluated at every
     #  interval
-      
-    cond_dt_fixed_t0_to_plot = np.arange(0.0,max_t0+1.0,1.0)
+    t0_eval_step = 1.0
+    t0_to_eval   = np.arange(0.0,max_t0+t0_eval_step*.01,t0_eval_step)
+
     
-    
-    for t0 in cond_dt_fixed_t0_to_plot:
+    for t0 in t0_to_eval:
         int_t0_dt = intervals[np.where( intervals > t0+fixed_dt)]
         int_t0 = intervals[np.where( intervals > t0)]
         
@@ -838,30 +851,68 @@ def forecast_plots(sim_file, event_graph_file=None, event_sequence_graph_file=No
     conditional = {}
 
             
-    for t0 in range(0,max_t0,t0_step):
+    #for t0 in range(0,max_t0,t0_step):
+    for t0 in t0_to_eval:
         int_t0 = intervals[np.where( intervals > t0)]
         if int_t0.size != 0:
             conditional[t0] = {'x':[],'y':[]}
-            for dt in range(max_t0-t0):
+            for dt in range(max_t0-int(t0)):
                 int_t0_dt = intervals[np.where( intervals > t0+dt)]
                 conditional[t0]['x'].append(t0+dt)
                 conditional[t0]['y'].append(1.0 - float(int_t0_dt.size)/float(int_t0.size))
         else:
             conditional[t0] = None
+        
+
 
     #---------------------------------------------------------------------------
     # t0 vs dt.
     #---------------------------------------------------------------------------
-    t0_dt = {}
+    t0_dt      = {}
+    t0_dt_plot = {}
+    
+    # In order to have a smooth plot, but still be able to evaluate the waiting
+    #   times by specifying a year, I will have one t0_dt array for plotting
+    #   (t0_dt_plot), and one for evaluating each year (t0_dt)
+    
 
     for percent in [0.25, 0.5, 0.75]:
-        t0_dt[int(percent*100)] = {'x':[],'y':[]}
-        for t0 in sorted(conditional.keys()):
-            if conditional[t0] is not None:
-                index = (np.abs(np.array(conditional[t0]['y'])-percent)).argmin()
+        t0_dt[int(percent*100)]      = {'x':[],'y':[]}
+        t0_dt_plot[int(percent*100)] = {'x':[],'y':[]}
+        #for t0 in sorted(conditional.keys()):
+        for t0 in t0_to_eval:
+            if t0 < max_t0:
+                if conditional[t0] is not None:
+                    index = (np.abs(np.array(conditional[t0]['y'])-percent)).argmin()
                 
-                t0_dt[int(percent*100)]['x'].append(t0)
-                t0_dt[int(percent*100)]['y'].append(conditional[t0]['x'][index]-t0)
+                    t0_dt[int(percent*100)]['x'].append(t0)
+                    t0_dt[int(percent*100)]['y'].append(conditional[t0]['x'][index]-t0)      
+                    if int(t0)%int(t0_plot_step) == 0:
+                        t0_dt_plot[int(percent*100)]['x'].append(t0)
+                        t0_dt_plot[int(percent*100)]['y'].append(conditional[t0]['x'][index]-t0)
+                
+    
+
+
+    #---------------------------------------------------------------------------
+    # Grab a specific recurrence time
+    #---------------------------------------------------------------------------
+    if year_eval is not None:
+        wait_50  = None
+        wait_75  = None
+        
+        ind_50 = (np.abs(np.array(t0_dt[50]['x'])-year_eval)).argmin()
+        ind_75 = (np.abs(np.array(t0_dt[50]['x'])-year_eval)).argmin()
+        
+        wait_50 = t0_dt[50]['y'][ind_50]
+        wait_75 = t0_dt[75]['y'][ind_75]
+                    
+        sys.stdout.write('For t0 = {:.2f} years'.format(year_eval))
+        sys.stdout.write('\n50% waiting time: {:.2f} years'.format(wait_50))
+        sys.stdout.write('\n75% waiting time: {:.2f} years'.format(wait_75))
+        sys.stdout.write('\n=======================================\n\n')
+    
+
         
     """    
     #---------------------------------------------------------------------------
@@ -1001,7 +1052,7 @@ def forecast_plots(sim_file, event_graph_file=None, event_sequence_graph_file=No
     else:
         outfile1 = 'local/'+fname1
                 
-    mplt.savefig(outfile1, dpi=res)
+    mplt.savefig(outfile1, dpi=res*3)
         
     
     ''''''
@@ -1015,15 +1066,12 @@ def forecast_plots(sim_file, event_graph_file=None, event_sequence_graph_file=No
     fig2    = mplt.figure(figsize=(imwi, imhi), dpi=res)
     cum_ax  = fig2.add_subplot(111)
     
-    #cum_spw = math.ceil((imw - lm - rm - sphs)/2.0)
-    #cum_ax = fig.add_axes((lm/imw, (bm + 2.0*sph + 2.0*smh + 4.0*spvs)/imh, cum_spw/imw, sph/imh))
-
-    cum_ax.plot(cumulative['x'], cumulative['y'], color=sp_line_color, linewidth=sp_line_width)
-    
     #  Plot the weibull distribution -------------------------------------------
     if weibull:
-        cum_ax.plot(cumulative['x'], vcanalysis.weibull(cumulative['x'],beta,tau),color='k',linewidth=sp_line_width-1.0)
-    
+        cum_ax.plot(cumulative['x'], vcanalysis.weibull(cumulative['x'],beta,tau),color='r',linewidth=sp_line_width-1.0)
+
+
+    cum_ax.plot(cumulative['x'], cumulative['y'], color=sp_line_color, linewidth=sp_line_width)
     
     # set the fonts for the tick labels
     for label in cum_ax.xaxis.get_ticklabels()+cum_ax.yaxis.get_ticklabels():
@@ -1041,7 +1089,7 @@ def forecast_plots(sim_file, event_graph_file=None, event_sequence_graph_file=No
     else:
         outfile2 = 'local/'+fname2
                 
-    mplt.savefig(outfile2, dpi=res)
+    mplt.savefig(outfile2, dpi=res*3)
 
     #---------------------------------------------------------------------------
     # Plot t0 vs. P(t0 + dt, t0) for fixed dt.
@@ -1052,11 +1100,11 @@ def forecast_plots(sim_file, event_graph_file=None, event_sequence_graph_file=No
     #cond_dt_fixed_ax = fig.add_axes(((lm + cum_spw + sphs)/imw, (bm + 2.0*sph + 2.0*smh + 4.0*spvs)/imh, cum_spw/imw, sph/imh))
     cond_dt_fixed_ax = fig3.add_subplot(111)
 
-    cond_dt_fixed_ax.plot(conditional_dt_fixed['x'], conditional_dt_fixed['y'], color=sp_line_color, linewidth=sp_line_width)
-    
     if weibull:
         weibull_vals = vcanalysis.cond_weibull_fixed_dt(conditional_dt_fixed['x'],fixed_dt,beta,tau)
-        cond_dt_fixed_ax.plot(conditional_dt_fixed['x'],weibull_vals, color='k', linewidth=sp_line_width-1.0)
+        cond_dt_fixed_ax.plot(conditional_dt_fixed['x'],weibull_vals, color='r', linewidth=sp_line_width-1.0)
+
+    cond_dt_fixed_ax.plot(conditional_dt_fixed['x'], conditional_dt_fixed['y'], color=sp_line_color, linewidth=sp_line_width)
     
     
     # set the fonts for the tick labels
@@ -1068,14 +1116,14 @@ def forecast_plots(sim_file, event_graph_file=None, event_sequence_graph_file=No
     cond_dt_fixed_ax.set_ylabel(r'P(t$_0$ + {}, t$_0$)'.format(int(fixed_dt)), fontproperties=framelabelfont)
     cond_dt_fixed_ax.set_xlabel(r't$_0$ [years]', fontproperties=framelabelfont)
     
-    fname3 = 'cond_prob_30_vs_time.png'
+    fname3 = 'cond_prob_'+str(int(fixed_dt))+'_vs_time.png'
     
     if fname_tag is not None:
         outfile3 = 'local/'+fname_tag+'_'+fname3
     else:
         outfile3 = 'local/'+fname3
                 
-    mplt.savefig(outfile3, dpi=res)
+    mplt.savefig(outfile3, dpi=res*3)
 
 
     #---------------------------------------------------------------------------
@@ -1083,18 +1131,20 @@ def forecast_plots(sim_file, event_graph_file=None, event_sequence_graph_file=No
     #---------------------------------------------------------------------------
     fig4 = mplt.figure(figsize=(imwi, imhi), dpi=res)
     
-    #cond_spw = math.ceil((imw - lm - rm - sphs)/2.0)
-    #cond_ax = fig.add_axes((lm/imw, (bm + 1.0*sph + 2.0*smh + 3.0*spvs)/imh, cond_spw/imw, sph/imh))
     cond_ax = fig4.add_subplot(111)
 
-    t0s_to_plot = [k for k in conditional.keys() if k <= max_t0_cond]
+    #t0s_to_plot = [k for k in conditional.keys() if k <= max_t0_cond]
+    t0s_to_plot = t0_for_multi_t0_plot
     
     for t0 in sorted(t0s_to_plot):
         if conditional[t0] is not None:
-            color = sp_line_colormap(float(t0)/float(max(t0s_to_plot)))
-            cond_ax.plot(conditional[t0]['x'], conditional[t0]['y'], color=color, linewidth=sp_line_width, label='{}'.format(t0))
+            color = sp_line_colormap(float(t0*.8)/float(max(t0s_to_plot)))
+
             if weibull:
                 cond_ax.plot(conditional[t0]['x'], vcanalysis.cond_weibull(conditional[t0]['x'],t0,beta,tau), color='k', linewidth=sp_line_width-1.0)
+
+            cond_ax.plot(conditional[t0]['x'], conditional[t0]['y'], color=color, linewidth=sp_line_width, label='{}'.format(int(t0)))
+
 
 
     # set the fonts for the tick labels
@@ -1116,7 +1166,7 @@ def forecast_plots(sim_file, event_graph_file=None, event_sequence_graph_file=No
     else:
         outfile4 = 'local/'+fname4
                 
-    mplt.savefig(outfile4, dpi=res)
+    mplt.savefig(outfile4, dpi=res*3)
 
 
     #---------------------------------------------------------------------------
@@ -1130,9 +1180,9 @@ def forecast_plots(sim_file, event_graph_file=None, event_sequence_graph_file=No
 
 
     percents = t0_dt.keys()
-    t0_dt_ax.fill_between(t0_dt[min(percents)]['x'], t0_dt[min(percents)]['y'], y2=t0_dt[max(percents)]['y'], linewidth=0, facecolor=t0_dt_range_color)
+    t0_dt_ax.fill_between(t0_dt_plot[min(percents)]['x'], t0_dt_plot[min(percents)]['y'], y2=t0_dt_plot[max(percents)]['y'], linewidth=0, facecolor=t0_dt_range_color)
     
-    for percent in t0_dt.iterkeys():
+    for percent in t0_dt_plot.iterkeys():
         if percent == min(percents):
             linewidth = t0_dt_sub_line_width
             color = t0_dt_sub_line_color
@@ -1145,7 +1195,12 @@ def forecast_plots(sim_file, event_graph_file=None, event_sequence_graph_file=No
             linewidth = t0_dt_main_line_width
             color = t0_dt_main_line_color
             linestyle = '-'
-        t0_dt_ax.plot(t0_dt[percent]['x'], t0_dt[percent]['y'], color=color, linewidth=linewidth, linestyle=linestyle, label='{}%'.format(percent))
+        t0_dt_ax.plot(t0_dt_plot[percent]['x'], t0_dt_plot[percent]['y'], color=color, linewidth=linewidth, linestyle=linestyle, label='{}%'.format(percent))
+        
+    
+    if year_eval is not None:
+        t0_dt_ax.axvline(x=year_eval,ymin=0,ymax=wait_75,color='r',linewidth=t0_dt_main_line_width,linestyle='--')
+    
     
     # set the fonts for the tick labels
     for label in t0_dt_ax.xaxis.get_ticklabels()+t0_dt_ax.yaxis.get_ticklabels():
@@ -1164,7 +1219,7 @@ def forecast_plots(sim_file, event_graph_file=None, event_sequence_graph_file=No
     else:
         outfile5 = 'local/'+fname5
                 
-    mplt.savefig(outfile5, dpi=res)
+    mplt.savefig(outfile5, dpi=res*3)
 
     
     """
