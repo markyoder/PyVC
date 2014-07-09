@@ -77,11 +77,14 @@ def weibull(x_array,beta,tau):
         return np.array([1-np.exp( -(x/float(tau))**beta) for x in x_array])
         
 #-------------------------------------------------------------------------------
-def cond_weibull(x_array,t0,beta,tau):
-    if len(x_array) < 2:
-        sys.exit("Input must be an array")
+def cond_weibull(x_array,t0,beta,tau,single=False):
+    if single==False:
+        if len(x_array) < 2:
+            sys.exit("Input must be an array")
+        else:
+            return np.array([1-np.exp( (t0/float(tau))**beta - (x/float(tau))**beta) for x in x_array])
     else:
-        return np.array([1-np.exp( (t0/float(tau))**beta - (x/float(tau))**beta) for x in x_array])
+        return 1-np.exp( (t0/float(tau))**beta - (x_array/float(tau))**beta)
 
 #-------------------------------------------------------------------------------
 def cond_weibull_fixed_dt(x_array,dt,beta,tau):
