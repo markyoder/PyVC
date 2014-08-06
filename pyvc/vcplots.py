@@ -2175,7 +2175,7 @@ def event_field_animation(sim_file, output_directory, event_range,
 #-------------------------------------------------------------------------------
 # plots event fields
 #-------------------------------------------------------------------------------
-def plot_event_field(sim_file, evnum, output_directory, field_type='displacement', fringes=True, padding=0.08, cutoff=None, tag=None, hi_res=False):
+def plot_event_field(sim_file, evnum, output_directory, field_type='displacement', fringes=True, padding=0.08, cutoff=None, tag=None, hi_res=False, free_air=True):
     
     sys.stdout.write('Initializing plot :: ')
     sys.stdout.flush()
@@ -2239,7 +2239,7 @@ def plot_event_field(sim_file, evnum, output_directory, field_type='displacement
     if field_type == 'displacement':
         EF = vcutils.VCDisplacementField(min_lat, max_lat, min_lon, max_lon, base_lat, base_lon, padding=padding)
     elif field_type == 'gravity':
-        EF = vcutils.VCGravityField(min_lat, max_lat, min_lon, max_lon, base_lat, base_lon, padding=padding)
+        EF = vcutils.VCGravityField(min_lat, max_lat, min_lon, max_lon, base_lat, base_lon, padding=padding, free_air=free_air)
 
     sys.stdout.write('done\n')
     sys.stdout.flush()

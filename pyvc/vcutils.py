@@ -325,7 +325,7 @@ class EventDataProcessor(multiprocessing.Process):
 # A class to handle parallel field calculations
 #-------------------------------------------------------------------------------
 class VCFieldProcessor(multiprocessing.Process):
-    def __init__(self, work_queue, result_queue, field_1d, event_element_data, event_element_slips, lat_size, lon_size, cutoff, type='displacement'):#, min_lat, min_lon, max_lat, max_lon):
+    def __init__(self, work_queue, result_queue, field_1d, event_element_data, event_element_slips, lat_size, lon_size, cutoff, type='displacement',freeAir=True):#, min_lat, min_lon, max_lat, max_lon):
         
         # base class initialization
         #multiprocessing.Process.__init__(self)
@@ -348,6 +348,9 @@ class VCFieldProcessor(multiprocessing.Process):
     
         #self.counter = counter
         #self.total_tasks = total_tasks
+	
+        self.freeAir = freeAir
+
     
     def run(self):
         while not self.kill_received:
@@ -416,9 +419,9 @@ class VCFieldProcessor(multiprocessing.Process):
             elif self.type == 'gravity':
                 # calculate the gravity changes
                 if self.cutoff is None:
-                    dGrav_1d = event.event_gravity_changes(self.field_1d, lame_lambda, lame_lambda)
+                    dGrav_1d = event.event_gravity_changes(self.field_1d, lame_lambda, lame_lambda, self.freeAir)
                 else:
-                    dGrav_1d = event.event_gravity_changes(self.field_1d, lame_lambda, lame_lambda, self.cutoff)
+                    dGrav_1d = event.event_gravity_changes(self.field_1d, lame_lambda, lame_lambda, self.cutoff, self.freeAir)
                 dGrav = np.array(dGrav_1d).reshape((self.lat_size,self.lon_size))
                 
                 # store the result
@@ -486,7 +489,9 @@ class VCField(object):
         
         self.field_1d = self.convert.convertArray2xyz(_lats_1d,_lons_1d)
 
-    def calculate_field_values(self, event_element_data, event_element_slips, cutoff, type='displacement'):
+    def calculate_field_values(self, event_element_data, event_element_slips, cutoff, type='displacement',free_air=True):
+        # Free air parameter is for gravity fields
+
         #-----------------------------------------------------------------------
         # Break up the work and start the workers
         #-----------------------------------------------------------------------
@@ -539,7 +544,8 @@ class VCField(object):
                 self.lats_1d.size,
                 self.lons_1d.size,
                 cutoff,
-                type=type
+                type=type,
+                freeAir=free_air
             )
             worker.start()
         
@@ -555,7 +561,7 @@ class VCField(object):
 # A class to handle calculating event gravity changes
 #-------------------------------------------------------------------------------
 class VCGravityField(VCField):
-    def __init__(self, min_lat, max_lat, min_lon, max_lon, base_lat, base_lon, padding=0.01, map_res='i', map_proj='cyl'):
+    def __init__(self, min_lat, max_lat, min_lon, max_lon, base_lat, base_lon, padding=0.01, map_res='i', map_proj='cyl',free_air=True):
         
         super(VCGravityField,self).__init__(min_lat, max_lat, min_lon, max_lon, base_lat, base_lon, padding, map_res, map_proj)
         
@@ -567,6 +573,7 @@ class VCGravityField(VCField):
         
         self.dG = None
         self.dG_min = sys.float_info.max
+	self.free_air = free_air
 
     #---------------------------------------------------------------------------
     # Sets up the gravity change calculation and then passes it to the
@@ -596,7 +603,7 @@ class VCGravityField(VCField):
         #-----------------------------------------------------------------------
         # Run the field calculation. The results are stored in self.results
         #-----------------------------------------------------------------------
-        super(VCGravityField,self).calculate_field_values(event_element_data, event_element_slips, cutoff, type='gravity')
+        super(VCGravityField,self).calculate_field_values(event_element_data, event_element_slips, cutoff, type='gravity',free_air=self.free_air)
         
         #-----------------------------------------------------------------------
         # Combine the results
@@ -625,7 +632,12 @@ class VCGravityField(VCField):
                     dG = result
                 else:
                     dG += result
-                np.save('{}dG.npy'.format(save_file_prefix), dG)
+
+                # New, not thoroughly tested
+                if self.free_air:
+                    np.save('{}dG_total.npy'.format(save_file_prefix), dG)
+                else:
+                    np.save('{}dG_dilat.npy'.format(save_file_prefix), dG)
 
 
     def init_field(self, value):
@@ -637,8 +649,12 @@ class VCGravityField(VCField):
             self.init_field(0.0)
         
         try:
-            dG = np.load('{}dG.npy'.format(file_prefix))
-            
+            # New, not thoroughly tested
+            if self.free_air:
+                dG = np.load('{}dG_total.npy'.format(file_prefix))
+            else:
+                dG = np.load('{}dG_dilat.npy'.format(file_prefix))
+
             '''
             min = np.amin(np.fabs(dG[dG.nonzero()]))
             if min < self.dG_min:
