@@ -717,7 +717,10 @@ def forecast_plots(sim_file, event_graph_file=None, event_sequence_graph_file=No
     
     
     if section_filter is not None:
-        num_secs = len(section_filter['filter'])
+        if not isinstance( section_filter['filter'], ( int, long ) ):
+            num_secs = len(section_filter['filter'])
+        else:
+            num_secs = 1
     else:
         sys.exit("***Error, must specify sections for a forecast.\n\t e.g. section_filter={'filter':(27,83)}\n")
      
@@ -795,7 +798,11 @@ def forecast_plots(sim_file, event_graph_file=None, event_sequence_graph_file=No
     max_t0      = int(max_interval)
     
     # Want somewhere between 4 and 6 different t0 values for conditional plots
-    if max_t0 < 180:
+    if max_t0 < 100:
+        t0_step = 5
+        max_t0_cond = 20
+        t0_plot_step = 3.0
+    elif max_t0 >= 100 and max_t0 < 180:
         t0_step = 20
         max_t0_cond = 80
         t0_plot_step = 10.0
