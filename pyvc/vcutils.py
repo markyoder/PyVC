@@ -325,7 +325,7 @@ class EventDataProcessor(multiprocessing.Process):
 # A class to handle parallel field calculations
 #-------------------------------------------------------------------------------
 class VCFieldProcessor(multiprocessing.Process):
-    def __init__(self, work_queue, result_queue, field_1d, event_element_data, event_element_slips, lat_size, lon_size, cutoff, type='displacement',freeAir=True):#, min_lat, min_lon, max_lat, max_lon):
+    def __init__(self, work_queue, result_queue, field_1d, event_element_data, event_element_slips, lat_size, lon_size, cutoff, type='displacement'):#, min_lat, min_lon, max_lat, max_lon):
         
         # base class initialization
         #multiprocessing.Process.__init__(self)
@@ -349,7 +349,6 @@ class VCFieldProcessor(multiprocessing.Process):
         #self.counter = counter
         #self.total_tasks = total_tasks
 	
-        self.freeAir = freeAir
 
     
     def run(self):
@@ -419,13 +418,24 @@ class VCFieldProcessor(multiprocessing.Process):
             elif self.type == 'gravity':
                 # calculate the gravity changes
                 if self.cutoff is None:
-                    dGrav_1d = event.event_gravity_changes(self.field_1d, lame_lambda, lame_lambda, self.freeAir)
+                    dGrav_1d = event.event_gravity_changes(self.field_1d, lame_lambda, lame_lambda)
                 else:
-                    dGrav_1d = event.event_gravity_changes(self.field_1d, lame_lambda, lame_lambda, self.cutoff, self.freeAir)
+                    dGrav_1d = event.event_gravity_changes(self.field_1d, lame_lambda, lame_lambda, self.cutoff)
                 dGrav = np.array(dGrav_1d).reshape((self.lat_size,self.lon_size))
                 
                 # store the result
                 self.result_queue.put(dGrav)
+            elif self.type == 'dilat_gravity':
+                # calculate the gravity changes
+                if self.cutoff is None:
+                    dGrav_1d = event.event_dilat_gravity_changes(self.field_1d, lame_lambda, lame_lambda)
+                else:
+                    dGrav_1d = event.event_dilat_gravity_changes(self.field_1d, lame_lambda, lame_lambda, self.cutoff)
+                dGrav = np.array(dGrav_1d).reshape((self.lat_size,self.lon_size))
+                
+                # store the result
+                self.result_queue.put(dGrav)
+                
 
 #-------------------------------------------------------------------------------
 # Parent class for all of the field calculations
@@ -489,9 +499,7 @@ class VCField(object):
         
         self.field_1d = self.convert.convertArray2xyz(_lats_1d,_lons_1d)
 
-    def calculate_field_values(self, event_element_data, event_element_slips, cutoff, type='displacement',free_air=True):
-        # Free air parameter is for gravity fields
-
+    def calculate_field_values(self, event_element_data, event_element_slips, cutoff, type='displacement'):
         #-----------------------------------------------------------------------
         # Break up the work and start the workers
         #-----------------------------------------------------------------------
@@ -544,8 +552,7 @@ class VCField(object):
                 self.lats_1d.size,
                 self.lons_1d.size,
                 cutoff,
-                type=type,
-                freeAir=free_air
+                type=type                
             )
             worker.start()
         
@@ -573,7 +580,8 @@ class VCGravityField(VCField):
         
         self.dG = None
         self.dG_min = sys.float_info.max
-	self.free_air = free_air
+        self.free_air = free_air
+
 
     #---------------------------------------------------------------------------
     # Sets up the gravity change calculation and then passes it to the
@@ -603,7 +611,10 @@ class VCGravityField(VCField):
         #-----------------------------------------------------------------------
         # Run the field calculation. The results are stored in self.results
         #-----------------------------------------------------------------------
-        super(VCGravityField,self).calculate_field_values(event_element_data, event_element_slips, cutoff, type='gravity',free_air=self.free_air)
+        if self.free_air:
+            super(VCGravityField,self).calculate_field_values(event_element_data, event_element_slips, cutoff, type='gravity')
+        else:
+            super(VCGravityField,self).calculate_field_values(event_element_data, event_element_slips, cutoff, type='dilat_gravity')
         
         #-----------------------------------------------------------------------
         # Combine the results
@@ -638,6 +649,7 @@ class VCGravityField(VCField):
                     np.save('{}dG_total.npy'.format(save_file_prefix), dG)
                 else:
                     np.save('{}dG_dilat.npy'.format(save_file_prefix), dG)
+
 
 
     def init_field(self, value):
@@ -689,7 +701,15 @@ class VCGravityField(VCField):
             
     def save_field_values(self,file_prefix):
         np.save('{}dG.npy'.format(save_file_prefix), self.dG)
-    
+        
+        
+        
+    def save_lat_lon_values(self,file_prefix):
+        np.save('{}lats.npy'.format(file_prefix), self.lats_1d)
+        np.save('{}lons.npy'.format(file_prefix), self.lons_1d)
+
+
+
     def shrink_field(self, percentage):
         self.dG *= percentage
         #zeros = np.zeros(self.dG.shape)
@@ -814,6 +834,7 @@ class VCDisplacementField(VCField):
             np.save('{}dX.npy'.format(save_file_prefix), dX)
             np.save('{}dY.npy'.format(save_file_prefix), dY)
             np.save('{}dZ.npy'.format(save_file_prefix), dZ)
+            
 
 
     def init_field(self, value):
@@ -824,6 +845,12 @@ class VCDisplacementField(VCField):
         self.dX.fill(value)
         self.dY.fill(value)
         self.dZ.fill(value)
+        
+        
+    def save_lat_lon_values(self,file_prefix):
+        np.save('{}lats.npy'.format(save_file_prefix), self.lats_1d)
+        np.save('{}lons.npy'.format(save_file_prefix), self.lons_1d)
+        
     
     def load_field_values(self, file_prefix):
         if self.dX is None or self.dY is None or self.dZ is None:

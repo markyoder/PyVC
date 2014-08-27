@@ -802,7 +802,7 @@ def forecast_plots(sim_file, event_graph_file=None, event_sequence_graph_file=No
         t0_step = 5
         max_t0_cond = 20
         t0_plot_step = 3.0
-    elif max_t0 >= 100 and max_t0 < 180:
+    elif max_t0 >= 100 and max_t0 < 200:
         t0_step = 20
         max_t0_cond = 80
         t0_plot_step = 10.0
@@ -1242,8 +1242,8 @@ def forecast_plots(sim_file, event_graph_file=None, event_sequence_graph_file=No
             color = t0_dt_main_line_color
             linestyle = '-'
 
-        if weibull:
-            t0_dt_ax.plot(t0_dt_weibull[percent]['x'], t0_dt_weibull[percent]['y'], color='r', linewidth=t0_dt_sub_line_width, linestyle='-')
+        #if weibull:
+        #    t0_dt_ax.plot(t0_dt_weibull[percent]['x'], t0_dt_weibull[percent]['y'], color='r', linewidth=t0_dt_sub_line_width, linestyle='-')
 
 
         t0_dt_ax.plot(t0_dt_plot[percent]['x'], t0_dt_plot[percent]['y'], color=color, linewidth=linewidth, linestyle=linestyle, label='{}%'.format(percent))
@@ -2175,7 +2175,7 @@ def event_field_animation(sim_file, output_directory, event_range,
 #-------------------------------------------------------------------------------
 # plots event fields
 #-------------------------------------------------------------------------------
-def plot_event_field(sim_file, evnum, output_directory, field_type='displacement', fringes=True, padding=0.08, cutoff=None, tag=None, hi_res=False, free_air=True):
+def plot_event_field(sim_file, evnum, output_directory, field_type='displacement', fringes=True, padding=0.08, cutoff=None, tag=None, hi_res=False,lat_lon=False):
     
     sys.stdout.write('Initializing plot :: ')
     sys.stdout.flush()
@@ -2192,11 +2192,14 @@ def plot_event_field(sim_file, evnum, output_directory, field_type='displacement
         os.makedirs(field_values_directory)
         
     PRE = '{}{}_'.format(field_values_directory, evnum)
-            
-    if field_type=='gravity':        
-        output_file = output_directory+'{}_dg'.format(evnum)
-    elif field_type=='displacement':
-        output_file = output_directory+'{}_displ'.format(evnum)
+      
+    if field_type is 'dilat_gravity':
+        output_file = output_directory+'{}_dg_dilat'.format(evnum)              
+    elif field_type is 'gravity':        
+        output_file = output_directory+'{}_dg_total'.format(evnum)
+    elif field_type is 'displacement':
+        output_file = output_directory+'{}_displace'.format(evnum)
+
         
     if tag is not None:
         output_file += '_'+tag
@@ -2239,12 +2242,20 @@ def plot_event_field(sim_file, evnum, output_directory, field_type='displacement
     if field_type == 'displacement':
         EF = vcutils.VCDisplacementField(min_lat, max_lat, min_lon, max_lon, base_lat, base_lon, padding=padding)
     elif field_type == 'gravity':
-        EF = vcutils.VCGravityField(min_lat, max_lat, min_lon, max_lon, base_lat, base_lon, padding=padding, free_air=free_air)
+        EF = vcutils.VCGravityField(min_lat, max_lat, min_lon, max_lon, base_lat, base_lon, padding=padding,free_air=True)
+    elif field_type == 'dilat_gravity':
+        EF = vcutils.VCGravityField(min_lat, max_lat, min_lon, max_lon, base_lat, base_lon, padding=padding,free_air=False)
+
 
     sys.stdout.write('done\n')
     sys.stdout.flush()
 
     field_values_loaded = EF.load_field_values(PRE)
+    
+    if lat_lon:
+        EF.save_lat_lon_values(PRE)
+        sys.stdout.write('\n***Latitude and longitude values written to file.')
+    
  
     if field_values_loaded:
         sys.stdout.write('Loading event {} {} field :: '.format(evnum, field_type))
@@ -2282,10 +2293,10 @@ def plot_event_field(sim_file, evnum, output_directory, field_type='displacement
 
     if field_type == 'displacement':
         EFP = vcplotutils.VCDisplacementFieldPlotter(EF.min_lat, EF.max_lat, EF.min_lon, EF.max_lon)
-    elif field_type == 'gravity':
+    elif field_type == 'gravity' or field_type == 'dilat_gravity':
         EFP = vcplotutils.VCGravityFieldPlotter(EF.min_lat, EF.max_lat, EF.min_lon, EF.max_lon)
 
-    generate_map(EF,EFP,fault_traces,fringes,event_data,output_file,field_type='gravity',hi_res=hi_res)
+    generate_map(EF,EFP,fault_traces,fringes,event_data,output_file,field_type=field_type,hi_res=hi_res)
 
     """
     EFP.set_field(EF)
@@ -4902,7 +4913,7 @@ def generate_map(EF,EFP,fault_traces,fringes,event_data,output_file,field_type='
         else:
             cb_title = 'Total displacement [m]'
 
-    elif field_type == 'gravity':
+    elif field_type == 'gravity' or field_type == 'dilat_gravity':
         cb_title        = r'Gravity changes [$\mu gal$]'
         # Make first and last ticks on colorbar be <MIN and >MAX
         cb_tick_labs    = [item.get_text() for item in cb_ax.get_xticklabels()]
