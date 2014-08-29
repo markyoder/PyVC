@@ -118,7 +118,7 @@ def sim_info(sim_file, sortby='event_magnitude', show=50, event_range=None, sect
             print '{ev_num:<10}{ev_year:<10.2f}{ev_mag:<10.2f}'.format(ev_num=event_data['event_number'][i], ev_year=event_data['event_year'][i], ev_mag=event_data['event_magnitude'][i])
 
 #-------------------------------------------------------------------------------
-def detailed_sim_info(sim_file, sortby='event_magnitude', show=15, event_range=None, section_filter=None, magnitude_filter=None,return_evnums=False):
+def detailed_sim_info(sim_file, sortby='event_magnitude', show=15, event_range=None, section_filter=None, magnitude_filter=None,return_evnums=False,min_mag=0.0):
 
      with VCSimData() as sim_data:
         evnums = []     
@@ -140,9 +140,10 @@ def detailed_sim_info(sim_file, sortby='event_magnitude', show=15, event_range=N
             sorted_data = [i[0] for i in sorted(enumerate(event_data[sortby]), key=itemgetter(1), reverse=True)][0:show]
      
         for i in sorted_data:
-            print '{ev_num:<10}{ev_year:<10.2f}{ev_mag:<10.2f}{ev_av_slip:<10.2f}{ev_rup_len:<10.2f}'.format(ev_num=event_data['event_number'][i], ev_year=event_data['event_year'][i], ev_mag=event_data['event_magnitude'][i],ev_av_slip=event_data['event_average_slip'][i],ev_rup_len=event_data['event_surface_rupture_length'][i]/1000.0)
-            if return_evnums:
-                evnums.append(event_data['event_number'][i])
+            if event_data['event_magnitude'][i] > min_mag:
+                print '{ev_num:<10}{ev_year:<10.2f}{ev_mag:<10.2f}{ev_av_slip:<10.2f}{ev_rup_len:<10.2f}'.format(ev_num=event_data['event_number'][i], ev_year=event_data['event_year'][i], ev_mag=event_data['event_magnitude'][i],ev_av_slip=event_data['event_average_slip'][i],ev_rup_len=event_data['event_surface_rupture_length'][i]/1000.0)
+                if return_evnums:
+                    evnums.append(event_data['event_number'][i])
 
      if return_evnums:
         return evnums
