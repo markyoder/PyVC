@@ -2,6 +2,7 @@
 from . import VCSys
 from . import vcexceptions
 from operator import itemgetter
+import sys
 
 #-------------------------------------------------------------------------------
 # A class representing the geometry of a Virtual California simulation.
@@ -105,6 +106,17 @@ class VCGeometry(VCSys):
         return rates
         
         
+    def get_element_slip_rate(self,block_id,per_year=True):
+        rates = {}
+        # Convert slip rates from meters/second to meters/(decimal year)
+        CONVERSION = 3.15576*pow(10,7)
+        
+        if per_year:
+            return self.geometry_data[block_id]['slip_velocity']*CONVERSION
+        else:
+            return self.geometry_data[block_id]['slip_velocity']
+        
+        
         
     def get_slip_time_series(self,events_in_range,event_element_slips,DT=0.1,start_year=0.0,duration=100.0,section_filter=None):
         from numpy import arange
@@ -128,31 +140,51 @@ class VCGeometry(VCSys):
         #Initialize time steps to evaluate slip    
         time_values = arange(start_year+DT,start_year+duration+DT,DT)
 
-        for k in range(len(time_values)):
-            if k>0:
-                # current time in simulation
-                right_now = time_values[k]
-        
-                # back slip all elements by subtracting the slip_rate*dt
-                for block_id in slip_time_series.keys():
-                    last_slip = slip_time_series[block_id][k-1]
-                    this_slip = slip_rates[block_id]*CONVERSION*DT
-                    slip_time_series[block_id].append(last_slip-this_slip)
+        if len(events_in_range['event_number']) == 0:
+            raise vcexceptions.NoEventsFound(event_range={'type':'year', 'filter':(start_year,start_year+duration)}, magnitude_filter=None, section_filter=section_filter)
+        else:
+            for k in range(len(time_values)):
+                if k>0:
+                    # current time in simulation
+                    right_now = time_values[k]
+            
+                    # back slip all elements by subtracting the slip_rate*dt
+                    for block_id in slip_time_series.keys():
+                        last_slip = slip_time_series[block_id][k-1]
+                        this_slip = slip_rates[block_id]*CONVERSION*DT
+                        slip_time_series[block_id].append(last_slip-this_slip)
 
-                # check if any elements slip as part of simulated event in the window of simulation time
-                # between (current time - DT, current time), add event slips to the slip at current time 
-                # for elements involved
-                for evid in events_in_range['event_number']:
-                    if right_now-DT < events_in_range['event_year'][evid] <= right_now:
-                        for block_id in event_element_slips[evid].keys():
-                            slip_time_series[block_id][k] += event_element_slips[evid][block_id]
-                            #if len(event_time_series[k]) == 1:
-                            #    event_time_series[k]       = events_in_range['magnitude'][evid]
-                            #else:
-                            #    event_time_series[k].append(events_in_range['magnitude'][evid])
+                    # check if any elements slip as part of simulated event in the window of simulation time
+                    # between (current time - DT, current time), add event slips to the slip at current time 
+                    # for elements involved
+                    for j in range(len(events_in_range['event_number'])):
+                        evid    = events_in_range['event_number'][j]
+                        ev_year = events_in_range['event_year'][j]
+                        if right_now-DT < ev_year <= right_now:
+                            for block_id in event_element_slips[evid].keys():
+                                try:
+                                    slip_time_series[block_id][k] += event_element_slips[evid][block_id]
+                                except KeyError:
+                                    # When faults within the specified section_filter have events that produce slip on elements
+                                    #   outside the section_filter, the slip history for the external elements
+                                    #   is added to the slip_time_series and only includes backslip plus any
+                                    #   co-seismic slips from events selected with the current 
+                                    #   section/magnitude_filter/event_range.
+                                    slip_time_series[block_id] = [0.0]
+                                    slip_rates[block_id] = self.get_element_slip_rate(block_id)
+                                    
+                                    for l in range(k):
+                                        last_slip = slip_time_series[block_id][l]
+                                        this_slip = slip_rates[block_id]*CONVERSION*DT
+                                        slip_time_series[block_id].append(last_slip-this_slip)
+                                
+                                #if len(event_time_series[k]) == 1:
+                                #    event_time_series[k]       = events_in_range['magnitude'][evid]
+                                #else:
+                                #    event_time_series[k].append(events_in_range['magnitude'][evid])
                             
-        #return slip_time_series,event_time_series
-        return slip_time_series
+            #return slip_time_series,event_time_series
+            return slip_time_series
 
 
 

@@ -348,6 +348,8 @@ class VCFieldProcessor(multiprocessing.Process):
     
         #self.counter = counter
         #self.total_tasks = total_tasks
+	
+
     
     def run(self):
         while not self.kill_received:
@@ -423,6 +425,17 @@ class VCFieldProcessor(multiprocessing.Process):
                 
                 # store the result
                 self.result_queue.put(dGrav)
+            elif self.type == 'dilat_gravity':
+                # calculate the gravity changes
+                if self.cutoff is None:
+                    dGrav_1d = event.event_dilat_gravity_changes(self.field_1d, lame_lambda, lame_lambda)
+                else:
+                    dGrav_1d = event.event_dilat_gravity_changes(self.field_1d, lame_lambda, lame_lambda, self.cutoff)
+                dGrav = np.array(dGrav_1d).reshape((self.lat_size,self.lon_size))
+                
+                # store the result
+                self.result_queue.put(dGrav)
+                
 
 #-------------------------------------------------------------------------------
 # Parent class for all of the field calculations
@@ -539,7 +552,7 @@ class VCField(object):
                 self.lats_1d.size,
                 self.lons_1d.size,
                 cutoff,
-                type=type
+                type=type                
             )
             worker.start()
         
@@ -555,7 +568,7 @@ class VCField(object):
 # A class to handle calculating event gravity changes
 #-------------------------------------------------------------------------------
 class VCGravityField(VCField):
-    def __init__(self, min_lat, max_lat, min_lon, max_lon, base_lat, base_lon, padding=0.01, map_res='i', map_proj='cyl'):
+    def __init__(self, min_lat, max_lat, min_lon, max_lon, base_lat, base_lon, padding=0.01, map_res='i', map_proj='cyl',free_air=True):
         
         super(VCGravityField,self).__init__(min_lat, max_lat, min_lon, max_lon, base_lat, base_lon, padding, map_res, map_proj)
         
@@ -567,6 +580,8 @@ class VCGravityField(VCField):
         
         self.dG = None
         self.dG_min = sys.float_info.max
+        self.free_air = free_air
+
 
     #---------------------------------------------------------------------------
     # Sets up the gravity change calculation and then passes it to the
@@ -596,7 +611,10 @@ class VCGravityField(VCField):
         #-----------------------------------------------------------------------
         # Run the field calculation. The results are stored in self.results
         #-----------------------------------------------------------------------
-        super(VCGravityField,self).calculate_field_values(event_element_data, event_element_slips, cutoff, type='gravity')
+        if self.free_air:
+            super(VCGravityField,self).calculate_field_values(event_element_data, event_element_slips, cutoff, type='gravity')
+        else:
+            super(VCGravityField,self).calculate_field_values(event_element_data, event_element_slips, cutoff, type='dilat_gravity')
         
         #-----------------------------------------------------------------------
         # Combine the results
@@ -625,7 +643,13 @@ class VCGravityField(VCField):
                     dG = result
                 else:
                     dG += result
-                np.save('{}dG.npy'.format(save_file_prefix), dG)
+
+                # New, not thoroughly tested
+                if self.free_air:
+                    np.save('{}dG_total.npy'.format(save_file_prefix), dG)
+                else:
+                    np.save('{}dG_dilat.npy'.format(save_file_prefix), dG)
+
 
 
     def init_field(self, value):
@@ -637,8 +661,12 @@ class VCGravityField(VCField):
             self.init_field(0.0)
         
         try:
-            dG = np.load('{}dG.npy'.format(file_prefix))
-            
+            # New, not thoroughly tested
+            if self.free_air:
+                dG = np.load('{}dG_total.npy'.format(file_prefix))
+            else:
+                dG = np.load('{}dG_dilat.npy'.format(file_prefix))
+
             '''
             min = np.amin(np.fabs(dG[dG.nonzero()]))
             if min < self.dG_min:
@@ -673,7 +701,15 @@ class VCGravityField(VCField):
             
     def save_field_values(self,file_prefix):
         np.save('{}dG.npy'.format(save_file_prefix), self.dG)
-    
+        
+        
+        
+    def save_lat_lon_values(self,file_prefix):
+        np.save('{}lats.npy'.format(file_prefix), self.lats_1d)
+        np.save('{}lons.npy'.format(file_prefix), self.lons_1d)
+
+
+
     def shrink_field(self, percentage):
         self.dG *= percentage
         #zeros = np.zeros(self.dG.shape)
@@ -798,6 +834,7 @@ class VCDisplacementField(VCField):
             np.save('{}dX.npy'.format(save_file_prefix), dX)
             np.save('{}dY.npy'.format(save_file_prefix), dY)
             np.save('{}dZ.npy'.format(save_file_prefix), dZ)
+            
 
 
     def init_field(self, value):
@@ -808,6 +845,12 @@ class VCDisplacementField(VCField):
         self.dX.fill(value)
         self.dY.fill(value)
         self.dZ.fill(value)
+        
+        
+    def save_lat_lon_values(self,file_prefix):
+        np.save('{}lats.npy'.format(save_file_prefix), self.lats_1d)
+        np.save('{}lons.npy'.format(save_file_prefix), self.lons_1d)
+        
     
     def load_field_values(self, file_prefix):
         if self.dX is None or self.dY is None or self.dZ is None:

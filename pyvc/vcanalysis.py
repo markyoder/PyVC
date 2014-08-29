@@ -162,9 +162,9 @@ def event_sections(sim_file,evnum):
         elements = events.get_event_elements(evnum)
         sections = geometry.sections_with_elements(elements)
         
-        sys.stdout.write('event {}'.format(evnum))    
+        sys.stdout.write('\nevent {}\n'.format(evnum))    
         for secid in sections:
-            sys.stdout.write('{sec:<10}{name:<10}'.format(sec=secid,name=geometry.get_section_name(secid)))
+            sys.stdout.write('{sec:<3}{name:<10}\t'.format(sec=secid,name=geometry.get_section_name(secid)))
     
 
 
