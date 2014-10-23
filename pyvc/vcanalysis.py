@@ -95,9 +95,22 @@ def cond_weibull_fixed_dt(x_array,dt,beta,tau):
 
 #-------------------------------------------------------------------------------
 # Prints out various information about a simulation.
+#
+# yoder, 4 sept 2014: ... and returns these data as a list...
 #-------------------------------------------------------------------------------
-def sim_info(sim_file, sortby='event_magnitude', show=50, event_range=None, section_filter=None, magnitude_filter=None):
+print "modding sim_info()"
+#def sim_info(sim_file, sortby='event_magnitude', show=50, event_range=None, section_filter=None, magnitude_filter=None):
+def sim_info(sim_file, sortby='event_magnitude', show=50, event_range=None, section_filter=None, magnitude_filter=None, return_data=True, print_data=True):
+     '''
+     # sim_file: simulation data file. must it be h5? well, it probably should be anyway.
+     # section_filter: dictionary like: {'filter':(<list of fault sections>)}
+     # magnitude_filter: something like "M>7", but check with Kasey
+     # return_data: do or don't return the data. the orignial version just prints to screen (std.out() ); we'd like to reserve
+     # the option to return data directly.
+     '''
+     #
      with VCSimData() as sim_data:
+        r_data = [['event_number', 'event_year', 'event_magnitude', 'event_range_duration']]
         # open the simulation data file
         sim_data.open_file(sim_file)
 
@@ -106,7 +119,8 @@ def sim_info(sim_file, sortby='event_magnitude', show=50, event_range=None, sect
         events = VCEvents(sim_data)
         geometry = VCGeometry(sim_data)
 
-        event_data = events.get_event_data(['event_number', 'event_year', 'event_magnitude', 'event_range_duration'], event_range=event_range, magnitude_filter=magnitude_filter, section_filter=section_filter)
+        #event_data = events.get_event_data(['event_number', 'event_year', 'event_magnitude', 'event_range_duration'], event_range=event_range, magnitude_filter=magnitude_filter, section_filter=section_filter)
+        event_data = events.get_event_data(r_data[0], event_range=event_range, magnitude_filter=magnitude_filter, section_filter=section_filter)
         
         print '{0:<10}{1:<10}{2:<10}'.format('num','year','magnitude')
         if sortby == 'event_elements':
@@ -115,14 +129,26 @@ def sim_info(sim_file, sortby='event_magnitude', show=50, event_range=None, sect
             sorted_data = [i[0] for i in sorted(enumerate(event_data[sortby]), key=itemgetter(1), reverse=True)][0:show]
      
         for i in sorted_data:
-            print '{ev_num:<10}{ev_year:<10.2f}{ev_mag:<10.2f}'.format(ev_num=event_data['event_number'][i], ev_year=event_data['event_year'][i], ev_mag=event_data['event_magnitude'][i])
+            if print_data: print '{ev_num:<10}{ev_year:<10.2f}{ev_mag:<10.2f}'.format(ev_num=event_data['event_number'][i], ev_year=event_data['event_year'][i], ev_mag=event_data['event_magnitude'][i])
+            if return_data: r_data += [[event_data['event_number'][i], event_data['event_year'][i], event_data['event_magnitude'][i] ]]
+        #
+        if return_data: return r_data
 
 #-------------------------------------------------------------------------------
-def detailed_sim_info(sim_file, sortby='event_magnitude', show=15, event_range=None, section_filter=None, magnitude_filter=None,return_evnums=False,min_mag=0.0):
-
+#def detailed_sim_info(sim_file, sortby='event_magnitude', show=15, event_range=None, section_filter=None, magnitude_filter=None,return_evnums=False,min_mag=0.0):
+def detailed_sim_info(sim_file, sortby='event_magnitude', show=15, event_range=None, section_filter=None, magnitude_filter=None, min_mag=0.0, return_data=True, print_data=True):
+     '''
+     # sim_file: simulation data file. must it be h5? well, it probably should be anyway.
+     # section_filter: dictionary like: {'filter':(<list of fault sections>)}
+     # magnitude_filter: something like "M>7", but check with Kasey
+     # return_data: do or don't return the data. the orignial version just prints...
+     '''
+     #
+     #
      with VCSimData() as sim_data:
-        evnums = []     
-     
+        #evnums = []
+        r_data = [['event_number', 'event_year', 'event_magnitude', 'event_range_duration','event_average_slip','event_surface_rupture_length']]
+     	#
         # open the simulation data file
         sim_data.open_file(sim_file)
 
@@ -131,7 +157,8 @@ def detailed_sim_info(sim_file, sortby='event_magnitude', show=15, event_range=N
         events = VCEvents(sim_data)
         geometry = VCGeometry(sim_data)
 
-        event_data = events.get_event_data(['event_number', 'event_year', 'event_magnitude', 'event_range_duration','event_average_slip','event_surface_rupture_length'], event_range=event_range, magnitude_filter=magnitude_filter, section_filter=section_filter)
+        #event_data = events.get_event_data(['event_number', 'event_year', 'event_magnitude', 'event_range_duration','event_average_slip','event_surface_rupture_length'], event_range=event_range, magnitude_filter=magnitude_filter, section_filter=section_filter)
+        event_data = events.get_event_data(r_data[0], event_range=event_range, magnitude_filter=magnitude_filter, section_filter=section_filter)
         
         print '{0:<10}{1:<10}{2:<10}{3:<10}{4:<10}'.format('num','year','magnitude','slip [m]','rupt.len [km]')
         if sortby == 'event_elements':
@@ -141,12 +168,15 @@ def detailed_sim_info(sim_file, sortby='event_magnitude', show=15, event_range=N
      
         for i in sorted_data:
             if event_data['event_magnitude'][i] > min_mag:
-                print '{ev_num:<10}{ev_year:<10.2f}{ev_mag:<10.2f}{ev_av_slip:<10.2f}{ev_rup_len:<10.2f}'.format(ev_num=event_data['event_number'][i], ev_year=event_data['event_year'][i], ev_mag=event_data['event_magnitude'][i],ev_av_slip=event_data['event_average_slip'][i],ev_rup_len=event_data['event_surface_rupture_length'][i]/1000.0)
-                if return_evnums:
-                    evnums.append(event_data['event_number'][i])
+                if print_data: print '{ev_num:<10}{ev_year:<10.2f}{ev_mag:<10.2f}{ev_av_slip:<10.2f}{ev_rup_len:<10.2f}'.format(ev_num=event_data['event_number'][i], ev_year=event_data['event_year'][i], ev_mag=event_data['event_magnitude'][i],ev_av_slip=event_data['event_average_slip'][i],ev_rup_len=event_data['event_surface_rupture_length'][i]/1000.0)
+                #if return_evnums:
+                #    evnums.append(event_data['event_number'][i])
+                if return_data:
+                	r_data += [[event_data['event_number'][i], event_data['event_year'][i], event_data['event_magnitude'][i], event_data['event_average_slip'][i], event_data['event_surface_rupture_length'][i]/1000.0]]
 
-     if return_evnums:
-        return evnums
+     #if return_evnums:
+     #   return evnums
+     if return_data: return r_data
 
 
 
