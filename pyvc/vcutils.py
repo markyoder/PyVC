@@ -450,7 +450,13 @@ class VCField(object):
         #max_map_height = 309.0
         
         # A conversion instance for doing the lat-lon to x-y conversions
-        self.convert = quakelib.Conversion(base_lat, base_lon)
+        #print "local convert..."
+        # yoder: this version of .Conversion() is not supported, so obviously, the right approach is to add
+        # a new overload definition. if that continues to be problematic, we can use a LL object:
+        # LL = quakelib.LatLonDepth(base_lat, base_lon)... and i appear to have this working in some version, which seems to be
+        # compiling properly but maybe not distributing. fo rnow, let's work around the problem:
+        self.convert = quakelib.Conversion(quakelib.LatLonDepth(base_lat, base_lon))
+        #self.convert = quakelib.Conversion(base_lat, base_lon)
         
         # Calculate the lat-lon range based on the min-max and the padding
         lon_range = max_lon - min_lon
@@ -488,16 +494,27 @@ class VCField(object):
         self.lons_1d = np.linspace(self.min_lon,self.max_lon,int(map_width))
         self.lats_1d = np.linspace(self.min_lat,self.max_lat,int(map_height))
         
-        _lons_1d = quakelib.FloatList()
-        _lats_1d = quakelib.FloatList()
+        # yoder:
+        _lons_1d = [float(lon) for lon in self.lons_1d]
+        _lats_1d = [float(lat) for lat in self.lats_1d]
         
-        for lon in self.lons_1d:
-            _lons_1d.append(lon)
+        #_lons_1d = quakelib.FloatList()
+        #_lats_1d = quakelib.FloatList()
         
-        for lat in self.lats_1d:
-            _lats_1d.append(lat)
+        #for lon in self.lons_1d:
+        #    _lons_1d.append(lon)
         
-        self.field_1d = self.convert.convertArray2xyz(_lats_1d,_lons_1d)
+        #for lat in self.lats_1d:
+        #    _lats_1d.append(lat)
+        
+        # yoder: this throws an error. mayb use:
+        # self.convert.convert2xyz(LLobj) ?
+        #self.field_1d = self.convert.convertArray2xyz(_lats_1d,_lons_1d)
+        #
+        # try this:
+        # ... and for better or worse, this returns something...
+        self.field_1d = [self.convert.convert2xyz(quakelib.LatLonDepth(_lats_1d[i], _lons_1d[i], 0.)) for i in xrange(len(_lats_1d))]
+        
 
     def calculate_field_values(self, event_element_data, event_element_slips, cutoff, type='displacement'):
         #-----------------------------------------------------------------------
