@@ -364,30 +364,49 @@ class VCFieldProcessor(multiprocessing.Process):
             #print 'processing elements {} - {}'.format(start, end)
             
             # create a element list
-            elements = quakelib.EventElementList()
+            #elements = quakelib.EventElementList()
+            elements = []
             
             # create elements and add them to the element list
             for element in self.event_element_data[start:end]:
                 #print element
-                ele = quakelib.EventElement4()
+                #ele = quakelib.EventElement4()
+                # yoder: has EventElement4() been encapsulated into SimElement()?
+                ele = quakelib.SimElement()
                 ele.set_rake(element['rake_rad'])
                 
-                ele.set_slip(self.event_element_slips[element['block_id']])
+                #ele.set_slip(self.event_element_slips[element['block_id']])
+                # depending on versin, may need to set these with a Vert() object (namely quakelib.Vert3() i think).
+                #for i in xrange(4):
+                #	#print "element %d: %d, element['m_x_pt%d'], element['m_y_pt%d'], element['m_z_pt%d'])" % (i, i, i+1, i+1, i+1)
+                #	print "element %d: %d " % (i, i)
+                #	print element['m_x_pt%d' % (i+1)], element['m_y_pt%d' % (i+1)], element['m_z_pt%d' % (i+1)]
+                
                 ele.set_vert(0, element['m_x_pt1'], element['m_y_pt1'], element['m_z_pt1'])
                 ele.set_vert(1, element['m_x_pt2'], element['m_y_pt2'], element['m_z_pt2'])
                 ele.set_vert(2, element['m_x_pt3'], element['m_y_pt3'], element['m_z_pt3'])
                 ele.set_vert(3, element['m_x_pt4'], element['m_y_pt4'], element['m_z_pt4'])
+                #
+                # yoder:
+                # set mu, lambda dynamically...
+                ele.set_lame_mu(element['lame_mu'])
+                ele.set_lame_lambda(element['lame_lambda'])
+                #
                 elements.append(ele)
             
             # create an event
-            event = quakelib.Event()
+            # yoder: comment this out; i think the field calcs have just been reorganized...
+            #event = quakelib.Event()
             
             # add the elements to the event
-            event.add_elements(elements)
+            #event.add_elements(elements)
+            #
+            # ... and there is a calc_cisplacement_vector() function in quakelib.SimElement (aka, for ele in elements: ele.calc_displacement()
             
             # lame params
-            lame_lambda = 3.2e10
-            lame_mu = 3.0e10
+            # (but these should be coming from block data at this point, right?
+            #lame_lambda = 3.2e10
+            #lame_mu = 3.0e10
             
             if self.type == 'displacement':
                 # calculate the displacements

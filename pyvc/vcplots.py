@@ -4483,7 +4483,8 @@ def plot_backslip(sim_file, duration, section_filter=None, field_type='gravity',
                 save_file_prefix=PRE)
 
     # Make the plot and save it
-    generate_map(EF,EFP,fault_traces,fringes,event_data,output_file,field_type='gravity')
+    #generate_map(EF,EFP,fault_traces,fringes,event_data,output_file,field_type='gravity')
+    generate_map(EF,EFP,fault_traces,fringes,event_data,output_file,field_type=field_type)
 
 
 #--------------------------------------------------------------------------
